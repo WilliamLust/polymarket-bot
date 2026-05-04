@@ -1,0 +1,60 @@
+# Polymarket Trading Bot Configuration
+# Copy to config.local.yaml and fill in your values
+
+# Backtesting
+backtesting:
+  data_path: "data/quant.parquet"
+  initial_bankroll: 10000
+  fee_rate: 0.02          # 2% Polymarket fee
+  slippage_bps: 50        # 50 basis points default slippage
+  look_ahead_prevention: true
+
+# Strategy: AI Probability Arbitrage
+strategy:
+  ai_prob_arb:
+    enabled: true
+    divergence_threshold: 0.15   # Trade when gap > 15%
+    max_position_size: 0.05     # Max 5% bankroll per position
+    kelly_fraction: 0.25        # Quarter Kelly
+    model: "qwen3.6:27b"
+    ollama_url: "http://localhost:11434"
+    
+  stacking_ensemble:
+    enabled: true
+    divergence_threshold: 0.10
+    max_position_size: 0.05
+    kelly_fraction: 0.25
+    features:
+      - current_price
+      - volume_24h
+      - liquidity
+      - rsi
+      - momentum
+      - order_imbalance
+      - volatility
+      - one_day_change
+      - one_week_change
+      - spread
+
+# Execution (US persons: trading violates ToS)
+execution:
+  enabled: false            # Set true only when ready to trade
+  chain_id: 137            # Polygon
+  rpc_url: "https://polygon-rpc.com"
+  # private_key: ""        # NEVER commit this — use .env
+  # funder: ""
+  signature_type: 0        # 0=EOA, 1=Email/Magic
+
+# Data Sources
+data_sources:
+  gamma_api: "https://gamma-api.polymarket.com"
+  clob_api: "https://clob.polymarket.com"
+  data_api: "https://data-api.polymarket.com"
+  xurl_account: "@DrWilliamLust"
+
+# GPU
+gpu:
+  model: "RTX 3090"
+  vram_gb: 24
+  ollama_model: "qwen3.6:27b"
+  think_mode: false        # Qwen 3.x requires think:false

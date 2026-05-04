@@ -1,0 +1,42 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Data files (too large for git)
+data/*.parquet
+data/*.csv
+data/*.zip
+!data/.gitkeep
+
+# Cloned repos (tracked separately)
+prediction-market-backtesting/
+polymarket-agents/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_metadata
+
+# Environment / secrets
+.env
+*.key
+*.pem
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models
+models/*.bin
+models/*.gguf
