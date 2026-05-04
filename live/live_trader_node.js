@@ -178,16 +178,29 @@ async function main() {
   // 7. Set API creds on the client (for L2 auth on subsequent calls)
   clobClient.creds = apiKey;
 
-  // 8. Check balance
+  // 8. Check balance via Gamma API (CLOB v2 balance-allowance endpoint has breaking changes)
   let balanceUsd = 0;
   try {
-    await clobClient.updateBalanceAllowance({ assetType: "COLLATERAL" });
-    const bal = await clobClient.getBalanceAllowance({ assetType: "COLLATERAL" });
-    balanceUsd = parseInt(bal.balance) / 1e6;
+    const balResp = await axios.get("https://clob.polymarket.com/balances", {
+      params: { signature_type: 3 },
+      headers: {
+        "POLY_ADDRESS": account.address,
+        "POLY_API_KEY": apiKey.key,
+        "POLY_PASSPHRASE": apiKey.passphrase,
+        "POLY_TIMESTAMP": Math.floor(Date.now() / 1000).toString(),
+      },
+      timeout: 10000,
+    });
+    // Response is { "USDC": { "balance": "49000000", ... } }
+    const usdc = balResp.data?.USDC || balResp.data?.USDCe || balResp.data;
+    if (typeof usdc === "object" && usdc.balance) {
+      balanceUsd = parseFloat(usdc.balance) / 1e6;
+    } else if (typeof balResp.data === "string") {
+      balanceUsd = parseFloat(balResp.data) / 1e6;
+    }
     console.log(`CLOB balance: $${balanceUsd.toFixed(2)}`);
   } catch (e) {
-    console.error(`Balance check failed: ${e.message || e}`);
-    // Non-fatal — continue in dry-run if balance unknown
+    console.log(`Balance check failed (${e.response?.data?.error || e.message}), continuing...`);
   }
 
   if (balanceUsd === 0 && !dryRun) {
