@@ -1,117 +1,168 @@
-# Polymarket Bot — RESTART.md
+# Polymarket Bot — Restart Guide
 
-## Project Status: Strategy Optimized with Realistic Fill Model
+## Current Status: ONE BLOCKER FROM LIVE TRADING
 
-**Last updated**: Session with orderbook-calibrated slippage integration
-**Git**: main branch, commit 2b08312 (+ uncommitted realistic slippage work)
+The Node.js live trader is deployed on VPS and working in dry-run mode. The only remaining
+step before live trading is moving $49.40 USDC from the proxy wallet's CLOB balance to the
+deposit wallet's CLOB balance. This requires a manual withdraw + re-deposit via Polymarket UI.
 
----
+## What Just Happened (This Session)
 
-## Key Finding: The Strategy Works, But Only at 95+¢
+1. Read RESTART.md, attempted to continue from prior context
+2. Installed Node.js v22.22.2 + npm 10.9.7 on VPS via nvm (apt was locked by background process)
+3. Wrote live_trader_node.js — Node.js live trader using @polymarket/clob-client-v2 with deposit wallet
+4. Fixed SDK API issues: BuilderApiKeyCreds doesn't exist (use plain object), no setApiCreds method
+   (assign to clobClient.creds directly), signatureType: 3 = POLY_1271, funderAddress = deposit wallet
+5. Deployed to VPS, tested dry-run: deposit wallet derived, API key created, geoblock OK (LT),
+   4 qualifying markets found
+6. Balance check returns errors because deposit wallet has $0 — expected, not a code bug
 
-The flat slippage model was wrong. Orderbook-calibrated fills reveal that slippage varies wildly by bucket:
+## Architecture
 
-| YES Bucket | Slippage | Effect | Playable? |
-|-----------|----------|--------|-----------|
-| 45-55¢    | +16.7%   | Pay 58¢ for 50¢ NO — kills edge | NO |
-| 55-65¢    | +12.9%   | Moderate overpayment | Marginal |
-| 65-75¢    | +8.9%    | Slight overpayment | Marginal |
-| 75-85¢    | -8.0%    | Fills BELOW theoretical | YES |
-| 85-95¢    | +63.8%   | Pay 16¢ for 10¢ NO — but 29% WR beats 17% breakeven | YES |
-| 95-100¢   | -65.1%   | Pay 0.56¢ for 1.58¢ NO — huge advantage | YES |
+```
+LOCAL (US server)                    VPS (Lithuania 76.13.251.154)
+┌─────────────────────┐              ┌──────────────────────────┐
+│ Backtesting          │              │ Node.js Live Trader      │
+│ Shadow Trader (paper)│              │ live_trader_node.js      │
+│ Data: quant.parquet  │              │ nvm + node v22           │
+│   36GB / 568M rows   │              │ npm packages installed   │
+│ Data: markets.parquet│              │ .env with keys           │
+│   735K markets       │              │ Deposit wallet deployed  │
+└─────────────────────┘              └──────────────────────────┘
+```
 
-### Why negative slippage at 95-100¢?
-YES and NO trade on separate orderbooks. At 95¢ YES, the NO ask sits at ~0.56¢ — below the implied 5¢ (1 - 0.95). This happens because YES market makers leave a spread, and NO liquidity providers compete at very tight levels. You get filled at essentially zero cost.
+## Key Addresses
 
----
+| Entity | Address | Notes |
+|--------|---------|-------|
+| EOA (private key signer) | 0x82d4A17d77E3f948Fe0319d71314fFdee7Afb7b3 | Derived from PK in .env |
+| Deposit wallet (ERC-1967) | 0xf277e98adFE6DD4670c2Bb871941DF628A8E0932 | Deployed, approved, $0 balance |
+| Proxy/funder wallet | 0xD47142b12ff69fa02f94f9b0f867E1a40027637F | $49.40 in CLOB balance (stuck) |
+| USDC.e on Polygon | 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 | 6 decimals |
 
-## Final Strategy: BUY_NO at YES >= 95¢ Only
+## VPS Details
 
-| Metric | Value |
-|--------|-------|
-| Positions | 59,353 |
-| Win rate | 9.0% |
-| Avg fill | 0.56¢ (theoretical: 1.58¢) |
-| Slippage advantage | +1.02¢ per position vs theoretical |
-| P&L at $1/pos | +$4,898 |
-| P&L at $10/pos | +$48,980 |
-| P&L at $50/pos | +$244,901 |
-| Max drawdown at $10/pos | $2,868 |
-| Sharpe ratio | 0.295 |
+- Host: 76.13.251.154 (Hostinger, Lithuania)
+- User: polymarket
+- Repo: /home/polymarket/polymarket-bot/
+- Node: via nvm (source ~/.nvm/nvm.sh && nvm use 22)
+- Python venv: ~/polymarket-bot/venv (has py-clob-client-v2, web3, etc.)
+- .env: POLYMARKET_PRIVATE_KEY, BUILDER_API_KEY, BUILDER_SECRET, BUILDER_PASS_PHRASE, etc.
+- npm packages: @polymarket/clob-client-v2, @polymarket/builder-relayer-client,
+  @polymarket/builder-signing-sdk, viem, axios, dotenv
 
-### By Category (95-100¢ bucket, $10/position):
-| Category | Count | WR | P&L |
-|----------|-------|----|----|
-| other | 30,690 | 10.3% | +$29,379 |
-| sports | 19,605 | 5.3% | +$9,270 |
-| crypto | 5,445 | 9.1% | +$4,524 |
-| tech | 2,377 | 12.7% | +$2,778 |
-| politics_us | 602 | 32.4% | +$1,857 |
-| weather | 565 | 17.9% | +$954 |
-| economics | 69 | 33.3% | +$220 |
+## The Blocker: Moving $49.40 to Deposit Wallet
 
-### Entry Threshold Optimization:
-| Min YES | Positions | WR | P&L $10 | MaxDD $10 |
-|---------|-----------|----|---------|-----------|
-| 0.45 | 350K | 43.4% | -$27,372 | $725K |
-| 0.55 | 132K | 26.0% | +$92,498 | $140K |
-| 0.65 | 103K | 19.5% | +$89,336 | $70K |
-| 0.75 | 86K | 15.7% | +$81,586 | $36K |
-| 0.85 | 73K | 12.7% | +$65,456 | $18K |
-| 0.95 | 59K | 9.0% | +$48,980 | $3K |
-| 0.99 | 38K | 5.5% | +$19,253 | $1K |
+The proxy wallet has $49.40 in Polymarket's CLOB smart contracts. The deposit wallet has $0.
+CLOB v2 only works with deposit wallets (signature_type=3 / POLY_1271). The proxy wallet
+flow (signature_type=1) is broken by `order_version_mismatch`.
 
-Higher threshold = lower P&L but MUCH lower drawdown. 95¢ is the sweet spot.
+**Withdraw + Re-deposit procedure:**
+1. Open SOCKS proxy: `ssh -D 1080 -N polymarket@76.13.251.154`
+2. Firefox → Settings → Network → SOCKS5 → 127.0.0.1:1080
+3. Go to https://polymarket.com/portfolio
+4. Click Withdraw → withdraw USDC to an external wallet address
+5. Then Deposit → send USDC to deposit wallet: 0xf277e98adFE6DD4670c2Bb871941DF628A8E0932
+6. Alternatively: withdraw to external wallet, then send USDC.e on Polygon directly
 
----
+**Alternative approach (untested):** Use the Polymarket UI to deposit directly to the deposit
+wallet address without withdrawing first (if the UI allows specifying a different destination).
 
-## Other Buckets Worth Playing
+## After the Transfer
 
-**75-85¢ bucket**: Negative slippage (-8%), fills at 19.2¢ vs 20.9¢ theoretical. Breakeven WR 19.6%, actual WR 31.8%. Comfortable edge. 13,472 positions.
+1. SSH to VPS, run balance check to confirm funds arrived
+2. Run live trader with $1 positions:
+   ```bash
+   ssh polymarket@76.13.251.154
+   source ~/.nvm/nvm.sh && nvm use 22
+   cd ~/polymarket-bot
+   node live/live_trader_node.js --live --loop --interval=300 --position-size=1
+   ```
+3. Type "yes" if prompted (not currently implemented as confirmation gate)
+4. Monitor: positions written to live/shadow_data/positions.json
 
-**85-95¢ bucket**: Despite 63.8% slippage (paying 16.4¢ for 10¢ NO), breakeven WR is only 16.7% and actual WR is 29.3%. Still profitable, but thin. 13,349 positions.
+## SDK Pitfalls Learned This Session
 
----
+1. **BuilderApiKeyCreds is NOT a class** — it's a plain object `{key, secret, passphrase}`
+2. **No setApiCreds method** — assign directly: `clobClient.creds = apiKey`
+3. **BuilderConfig takes localBuilderCreds** (plain object, not BuilderSigner instance)
+4. **BuilderSigner is separate** — only needed if you're manually constructing builder headers
+5. **createOrDeriveApiKey** tries create first (fails with 400 for existing keys), then derives
+6. **Balance-allowance endpoint broken in v2** — "Invalid asset type" with COLLATERAL param
+7. **nvm is required** — apt was locked by Hostinger background processes, nvm bypasses root
+8. **PYTHONUNBUFFERED=1** needed for live Python output in background processes
+9. **Python SDK is dead end** — both py-clob-client (order_version_mismatch) and
+   py-clob-client-v2 (signer address mismatch) fail for proxy wallets and deposit wallets respectively
 
-## Data Sources
+## Live Trader Commands (VPS)
 
-- **quant.parquet**: 36GB, 568.6M trades, 577 row groups. Deduped to 615K (1/market, keep=first)
-- **markets.parquet**: 735K markets, 734K resolved (YES/NO)
-- **orderbook_depth_calibration.json**: 39 live CLOB snapshots, 6 price buckets
-- Slippage model: `actual_no_cost = theoretical * (1 + bucket_slippage_pct)`
+```bash
+# SSH in
+ssh polymarket@76.13.251.154
 
----
+# Activate Node
+source ~/.nvm/nvm.sh && nvm use 22
+
+# Dry run (default)
+cd ~/polymarket-bot && node live/live_trader_node.js
+
+# Live trading with loop
+node live/live_trader_node.js --live --loop --interval=300 --position-size=1
+
+# Pull latest code
+cd ~/polymarket-bot && git pull
+
+# Check Python balance (legacy)
+source venv/bin/activate && python live/check_balances.py
+```
+
+## Shadow Trader (LOCAL)
+
+Running as background process. Check with:
+```bash
+# List processes
+ps aux | grep shadow_trader
+
+# Check process via Hermes
+# proc_e728aef6303f was the last known session ID
+```
+
+## Strategy Parameters
+
+- Threshold: BUY_NO at YES >= 95¢ (YES range 0.95-0.99)
+- Position size: $1 (conservative start)
+- Max daily positions: 20
+- Backtest results: 59,353 pos, 9% WR, +$48,980 at $10/pos, MaxDD $2,868, Sharpe 0.295
+- Key risk: slippage at 5¢ wipes nearly all edge (+$25 PnL)
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `backtesting/enhanced_backtest.py` | Dedup + flat slippage + all-category |
-| `backtesting/realistic_slippage_backtest.py` | Orderbook-calibrated fill model |
-| `backtesting/strategy_optimizer.py` | Entry threshold optimization |
-| `backtesting/fetch_orderbook_depth.py` | Live orderbook sampler |
-| `backtesting/orderbook_depth_calibration.json` | 39 calibration snapshots |
-| `backtesting/weather_backtest.py` | Original (overcounted) weather backtest |
+| File | Location | Purpose |
+|------|----------|---------|
+| live_trader_node.js | ~/polymarket-bot/live/ | Node.js live trader (WORKING in dry-run) |
+| live_trader.py | ~/polymarket-bot/live/ | Python live trader (BROKEN, SDK bugs) |
+| shadow_trader.py | ~/polymarket-bot/live/ | Paper trader, running on local |
+| check_balances.py | ~/polymarket-bot/live/ | Web3.py balance checker |
+| .env | VPS: ~/polymarket-bot/.env | Private key, builder keys |
+| realistic_slippage_backtest.py | ~/polymarket-bot/backtesting/ | Orderbook fill model |
+| strategy_optimizer.py | ~/polymarket-bot/backtesting/ | Threshold optimizer |
 
----
+## GitHub
 
-## Caveats & Risks
+Repo: https://github.com/WilliamLust/polymarket-bot
+Latest commit: 12d5b90 "Add check_balances.py + shadow trader data"
+All changes pushed.
 
-1. **Calibration sample is small** — only 39 orderbook snapshots. 36/75 failed (resolved/inactive markets). Should re-sample with active markets only.
-2. **No historical orderbook data** — current live slippage applied to 4+ years of historical trades. Market microstructure may have changed.
-3. **Survivorship bias** — we only see resolved markets. Cancelled/voided markets excluded.
-4. **US residents can't trade** — ToS restriction. Backtesting only.
-5. **The $100/pos P&L of $490K is unrealistic** — at $100/position, you eat through the orderbook. The $98K depth at best ask evaporates fast with size.
-6. **Negative slippage is suspicious** — paying less than theoretical sounds great but may be a sampling artifact. Need more data points.
-7. **Strategy is well-known** — other bots likely already arbing this edge. Live performance will be worse.
+## Remaining Work (Priority Order)
 
----
+1. **Move $49.40 to deposit wallet** (manual — withdraw via SOCKS proxy + re-deposit)
+2. **Test live order placement** — run live_trader_node.js --live with $1 positions
+3. **Build systemd service** for Node.js bot (auto-restart, logging)
+4. **Monitor fill rates** — compare actual fills to backtest assumptions
+5. **Scale position size** — after 50+ successful live positions, increase from $1
+6. **Update VPS_DEPLOYMENT.md** — add Node.js/nvm instructions, deposit wallet flow
 
-## Next Steps
+## Polymarket Account
 
-1. **Re-sample orderbooks with active markets only** — filter `active=true` before querying CLOB API
-2. **Build live paper-trading bot** — deploy with $1 positions to validate fill assumptions
-3. **Size-aware slippage model** — model fill price as function of order size × bucket depth
-4. **Combine 75-85 + 95-100 buckets** — both have favorable slippage; blended strategy
-5. **Time-of-day analysis** — slippage may vary with market hours/liquidity
-6. **Void market handling** — some resolved markets get voided (refund). Need to handle these.
+URL: https://polymarket.com/@0xd47142b12ff69fa02f94f9b0f867e1a40027637f-1757694862978
+Email: williamjameslust@gmail.com
