@@ -130,5 +130,16 @@
     "slippage": 0.4285714285714294,
     "size": 1.0,
     "cost": 0.055
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T19:23:16.404897+00:00",
+    "market_id": "2132190",
+    "question": "Palantir (PLTR) Up or Down on May 4?",
+    "fill_price": 0.029,
+    "theoretical": 0.020000000000000018,
+    "slippage": 0.4499999999999988,
+    "size": 1.0,
+    "cost": 0.029
   }
 ]

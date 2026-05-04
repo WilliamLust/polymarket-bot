@@ -166,5 +166,19 @@
     "status": "open",
     "resolution": null,
     "pnl": null
+  },
+  {
+    "id": "2132190",
+    "question": "Palantir (PLTR) Up or Down on May 4?",
+    "entry_time": "2026-05-04T19:23:16.404897+00:00",
+    "yes_price_at_entry": 0.98,
+    "no_fill_price": 0.029,
+    "theoretical_no_cost": 0.020000000000000018,
+    "slippage_pct": 0.4499999999999988,
+    "position_size": 1.0,
+    "entry_cost": 0.029,
+    "status": "open",
+    "resolution": null,
+    "pnl": null
   }
 ]

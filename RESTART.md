@@ -1,21 +1,115 @@
 # Polymarket Bot — Restart Guide
 
-## Current Status: ONE BLOCKER FROM LIVE TRADING
+## Current Status: USDC DEPOSITED BUT WRONG TYPE — NEED BRIDGE API
 
-The Node.js live trader is deployed on VPS and working in dry-run mode. The only remaining
-step before live trading is moving $49.40 USDC from the proxy wallet's CLOB balance to the
-deposit wallet's CLOB balance. This requires a manual withdraw + re-deposit via Polymarket UI.
+$49.40 native USDC is at the deposit wallet on Polygon, but **native USDC is PAUSED** on the
+CollateralOnramp. Only USDC.e can be wrapped into pUSD. The Bridge API at `bridge.polymarket.com`
+handles native USDC → pUSD conversion automatically.
 
 ## What Just Happened (This Session)
 
-1. Read RESTART.md, attempted to continue from prior context
-2. Installed Node.js v22.22.2 + npm 10.9.7 on VPS via nvm (apt was locked by background process)
-3. Wrote live_trader_node.js — Node.js live trader using @polymarket/clob-client-v2 with deposit wallet
-4. Fixed SDK API issues: BuilderApiKeyCreds doesn't exist (use plain object), no setApiCreds method
-   (assign to clobClient.creds directly), signatureType: 3 = POLY_1271, funderAddress = deposit wallet
-5. Deployed to VPS, tested dry-run: deposit wallet derived, API key created, geoblock OK (LT),
-   4 qualifying markets found
-6. Balance check returns errors because deposit wallet has $0 — expected, not a code bug
+1. Verified $49.40 native USDC at deposit wallet via on-chain read (viem)
+2. Confirmed deposit wallet IS deployed (relayer returns deployed:true with type=WALLET)
+3. Fixed relayer batch payload format — switched to `executeDepositWalletBatch(calls, address, deadline)`
+4. Deadline must be a string with 1hr+ window (4min caused "deadline too soon")
+5. Batch submission hit "batch would revert" — root cause: **native USDC is paused on CollateralOnramp**
+6. Confirmed: `paused(USDC_NATIVE) = true`, `paused(USDC.e) = false`
+7. Found Bridge API at `bridge.polymarket.com` supports both USDC types on Polygon (chainId 137)
+8. Got bridge EVM deposit address: `0x21f6F035C913C9fE0525BF44B3555453867DCe2B`
+
+## Key Discovery: Native USDC vs USDC.e
+
+| Token | Address | Paused on Onramp | Can Wrap? |
+|-------|---------|-------------------|-----------|
+| USDC (native) | 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359 | YES | NO |
+| USDC.e (bridged) | 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 | NO | YES |
+| pUSD (collateral) | 0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB | N/A | N/A |
+
+The deposit wallet holds native USDC. We need to either:
+- **Option A (RECOMMENDED)**: Use Bridge API to send native USDC → auto-converts to pUSD
+- **Option B**: Swap native USDC → USDC.e via DEX, then wrap via CollateralOnramp
+
+## Bridge API Approach (Step by Step)
+
+### How the Bridge Works
+
+The Polymarket Bridge API accepts deposits from many chains/assets and auto-converts
+everything to pUSD on Polygon. For Polygon-based USDC, the flow is:
+
+1. Get your deposit address via `POST /deposit`
+2. Transfer USDC to that deposit address (same-chain, no gas for cross-chain)
+3. Bridge detects the transfer, swaps USDC → pUSD, credits to your wallet
+4. pUSD appears in your CLOB balance after sync
+
+### Step 1: Get Bridge Deposit Address
+
+```bash
+curl -X POST https://bridge.polymarket.com/deposit \
+  -H "Content-Type: application/json" \
+  -d '{"address": "0xf277e98adFE6DD4670c2Bb871941DF628A8E0932"}'
+```
+
+Returns:
+```json
+{
+  "address": {
+    "evm": "0x21f6F035C913C9fE0525BF44B3555453867DCe2B",
+    "svm": "HhTKUanXXwfnrrGLrgJowKh6HeS2R9YU2hDc1Eers5sV",
+    "btc": "bc1qs7n8cuju0tath9ealas3wtdzk78pws34evutje",
+    "tron": "TU7WZ4ojjCii4DWpsmc8h9o6XHgbmrYQUh"
+  }
+}
+```
+
+The `evm` address is where we send Polygon USDC.
+
+### Step 2: Transfer USDC to Bridge Deposit Address
+
+This is the tricky part — the deposit wallet is a smart contract, not an EOA. We need
+to submit a relayer batch to call `USDC.transfer(bridgeEvmAddress, amount)`.
+
+```javascript
+// On VPS, run a relayer batch script
+const calls = [{
+  target: USDC_NATIVE,  // 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359
+  value: "0",
+  data: encodeFunctionData({
+    abi: [{ name: "transfer", type: "function",
+      inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }],
+      outputs: [{ type: "bool" }] }],
+    args: ["0x21f6F035C913C9fE0525BF44B3555453867DCe2B", 49400000n]
+  })
+}];
+const deadline = Math.floor(Date.now() / 1000 + 3600).toString();
+await relayClient.executeDepositWalletBatch(calls, DEPOSIT_WALLET, deadline);
+```
+
+### Step 3: Wait for Bridge Processing
+
+- Monitor at: `GET https://bridge.polymarket.com/status/0xf277e98adFE6DD4670c2Bb871941DF628A8E0932`
+- Polygon deposits typically process in minutes
+- Minimum deposit: $2 for Polygon assets
+
+### Step 4: Sync CLOB Balance
+
+After pUSD arrives at deposit wallet:
+```javascript
+const clob = new ClobClient({
+  host: "https://clob.polymarket.com",
+  chain: 137,
+  signer: walletClient,
+  creds: apiKey,
+  signatureType: SignatureTypeV2.POLY_1271,
+  funderAddress: "0xf277e98adFE6DD4670c2Bb871941DF628A8E0932",
+});
+await clob.updateBalanceAllowance({ asset_type: AssetType.COLLATERAL });
+```
+
+### Step 5: Go Live
+
+```bash
+node live/live_trader_node.js --live --loop --interval=300 --position-size=1
+```
 
 ## Architecture
 
@@ -36,9 +130,16 @@ LOCAL (US server)                    VPS (Lithuania 76.13.251.154)
 | Entity | Address | Notes |
 |--------|---------|-------|
 | EOA (private key signer) | 0x82d4A17d77E3f948Fe0319d71314fFdee7Afb7b3 | Derived from PK in .env |
-| Deposit wallet (ERC-1967) | 0xf277e98adFE6DD4670c2Bb871941DF628A8E0932 | Deployed, approved, $0 balance |
-| Proxy/funder wallet | 0xD47142b12ff69fa02f94f9b0f867E1a40027637F | $49.40 in CLOB balance (stuck) |
-| USDC.e on Polygon | 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 | 6 decimals |
+| Deposit wallet (ERC-1967) | 0xf277e98adFE6DD4670c2Bb871941DF628A8E0932 | Deployed, holds $49.40 native USDC |
+| Bridge EVM deposit addr | 0x21f6F035C913C9fE0525BF44B3555453867DCe2B | Send USDC here for auto pUSD conversion |
+| Proxy/funder wallet | 0xD47142b12ff69fa02f94f9b0f867E1a40027637F | $0 (already withdrawn) |
+| USDC native on Polygon | 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359 | PAUSED on onramp |
+| USDC.e on Polygon | 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 | Can be wrapped |
+| pUSD (collateral) | 0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB | CLOB trading token |
+| CollateralOnramp | 0x93070a847efEf7F70739046A929D47a521F5B8ee | Wraps USDC.e → pUSD |
+| CTF Exchange V2 | 0xE111180000d2663C0091e4f400237545B87B996B | Conditional tokens |
+| DepositWalletFactory | 0x00000000000Fb5C9ADea0298D729A0CB3823Cc07 | Creates deposit wallets |
+| DepositWalletImpl | 0x58CA52ebe0DadfdF531Cde7062e76746de4Db1eB | Implementation contract |
 
 ## VPS Details
 
@@ -50,49 +151,23 @@ LOCAL (US server)                    VPS (Lithuania 76.13.251.154)
 - .env: POLYMARKET_PRIVATE_KEY, BUILDER_API_KEY, BUILDER_SECRET, BUILDER_PASS_PHRASE, etc.
 - npm packages: @polymarket/clob-client-v2, @polymarket/builder-relayer-client,
   @polymarket/builder-signing-sdk, viem, axios, dotenv
+- SOCKS proxy: `ssh -D 1080 -N polymarket@76.13.251.154`
 
-## The Blocker: Moving $49.40 to Deposit Wallet
+## SDK Pitfalls (All Sessions)
 
-The proxy wallet has $49.40 in Polymarket's CLOB smart contracts. The deposit wallet has $0.
-CLOB v2 only works with deposit wallets (signature_type=3 / POLY_1271). The proxy wallet
-flow (signature_type=1) is broken by `order_version_mismatch`.
-
-**Withdraw + Re-deposit procedure:**
-1. Open SOCKS proxy: `ssh -D 1080 -N polymarket@76.13.251.154`
-2. Firefox → Settings → Network → SOCKS5 → 127.0.0.1:1080
-3. Go to https://polymarket.com/portfolio
-4. Click Withdraw → withdraw USDC to an external wallet address
-5. Then Deposit → send USDC to deposit wallet: 0xf277e98adFE6DD4670c2Bb871941DF628A8E0932
-6. Alternatively: withdraw to external wallet, then send USDC.e on Polygon directly
-
-**Alternative approach (untested):** Use the Polymarket UI to deposit directly to the deposit
-wallet address without withdrawing first (if the UI allows specifying a different destination).
-
-## After the Transfer
-
-1. SSH to VPS, run balance check to confirm funds arrived
-2. Run live trader with $1 positions:
-   ```bash
-   ssh polymarket@76.13.251.154
-   source ~/.nvm/nvm.sh && nvm use 22
-   cd ~/polymarket-bot
-   node live/live_trader_node.js --live --loop --interval=300 --position-size=1
-   ```
-3. Type "yes" if prompted (not currently implemented as confirmation gate)
-4. Monitor: positions written to live/shadow_data/positions.json
-
-## SDK Pitfalls Learned This Session
-
-1. **BuilderApiKeyCreds is NOT a class** — it's a plain object `{key, secret, passphrase}`
-2. **No setApiCreds method** — assign directly: `clobClient.creds = apiKey`
-3. **BuilderConfig takes localBuilderCreds** (plain object, not BuilderSigner instance)
-4. **BuilderSigner is separate** — only needed if you're manually constructing builder headers
+1. **Native USDC is PAUSED on CollateralOnramp** — must use USDC.e or Bridge API
+2. **BuilderApiKeyCreds is NOT a class** — plain object `{key, secret, passphrase}`
+3. **No setApiCreds method** — assign directly: `clobClient.creds = apiKey`
+4. **BuilderConfig takes localBuilderCreds** (plain object)
 5. **createOrDeriveApiKey** tries create first (fails with 400 for existing keys), then derives
 6. **Balance-allowance endpoint broken in v2** — "Invalid asset type" with COLLATERAL param
-7. **nvm is required** — apt was locked by Hostinger background processes, nvm bypasses root
-8. **PYTHONUNBUFFERED=1** needed for live Python output in background processes
-9. **Python SDK is dead end** — both py-clob-client (order_version_mismatch) and
-   py-clob-client-v2 (signer address mismatch) fail for proxy wallets and deposit wallets respectively
+7. **nvm is required** — apt locked by Hostinger background processes
+8. **Python SDK is dead end** — py-clob-client (order_version_mismatch) and
+   py-clob-client-v2 (signer address mismatch) both broken
+9. **Relayer deadline must be string with 1hr+ window** — 4min causes "deadline too soon"
+10. **Relayer checks deployed status with wrong type by default** — use type=WALLET
+11. **Relayer simulates batches** — if any call reverts, whole batch rejected with "batch would revert"
+12. **ClobClient v2 constructor** uses object param: `{ host, chain, signer, creds, signatureType, funderAddress }`
 
 ## Live Trader Commands (VPS)
 
@@ -111,20 +186,6 @@ node live/live_trader_node.js --live --loop --interval=300 --position-size=1
 
 # Pull latest code
 cd ~/polymarket-bot && git pull
-
-# Check Python balance (legacy)
-source venv/bin/activate && python live/check_balances.py
-```
-
-## Shadow Trader (LOCAL)
-
-Running as background process. Check with:
-```bash
-# List processes
-ps aux | grep shadow_trader
-
-# Check process via Hermes
-# proc_e728aef6303f was the last known session ID
 ```
 
 ## Strategy Parameters
@@ -144,23 +205,21 @@ ps aux | grep shadow_trader
 | shadow_trader.py | ~/polymarket-bot/live/ | Paper trader, running on local |
 | check_balances.py | ~/polymarket-bot/live/ | Web3.py balance checker |
 | .env | VPS: ~/polymarket-bot/.env | Private key, builder keys |
-| realistic_slippage_backtest.py | ~/polymarket-bot/backtesting/ | Orderbook fill model |
-| strategy_optimizer.py | ~/polymarket-bot/backtesting/ | Threshold optimizer |
+| package.json | ~/polymarket-bot/ | Node.js dependencies |
 
 ## GitHub
 
 Repo: https://github.com/WilliamLust/polymarket-bot
-Latest commit: 12d5b90 "Add check_balances.py + shadow trader data"
-All changes pushed.
 
 ## Remaining Work (Priority Order)
 
-1. **Move $49.40 to deposit wallet** (manual — withdraw via SOCKS proxy + re-deposit)
-2. **Test live order placement** — run live_trader_node.js --live with $1 positions
-3. **Build systemd service** for Node.js bot (auto-restart, logging)
-4. **Monitor fill rates** — compare actual fills to backtest assumptions
-5. **Scale position size** — after 50+ successful live positions, increase from $1
-6. **Update VPS_DEPLOYMENT.md** — add Node.js/nvm instructions, deposit wallet flow
+1. **Submit relayer batch to transfer USDC to bridge address** — USDC.transfer(bridgeEvm, 49400000)
+2. **Wait for bridge processing** — monitor bridge.polymarket.com/status
+3. **Sync CLOB balance** — updateBalanceAllowance with POLY_1271
+4. **Go live** — node live_trader_node.js --live --loop --interval=300 --position-size=1
+5. **Monitor fill rates** — compare actual fills to backtest assumptions
+6. **Build systemd service** for Node.js bot (auto-restart, logging)
+7. **Scale position size** — after 50+ successful live positions, increase from $1
 
 ## Polymarket Account
 
