@@ -40,3 +40,4 @@ Thumbs.db
 # Models
 models/*.bin
 models/*.gguf
+cloned_repos/
