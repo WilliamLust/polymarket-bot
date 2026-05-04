@@ -42,5 +42,93 @@
     "slippage": 0.20000000000000043,
     "size": 1.0,
     "cost": 0.051
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T14:45:14.665117+00:00",
+    "market_id": "2137314",
+    "question": "Will the highest temperature in Munich be 24\u00b0C on May 4?",
+    "fill_price": 0.05,
+    "theoretical": 0.030000000000000027,
+    "slippage": 0.6666666666666653,
+    "size": 1.0,
+    "cost": 0.05
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T14:45:14.873055+00:00",
+    "market_id": "2097926",
+    "question": "Will the price of Ethereum be between $2,300 and $2,400 on May 4?",
+    "fill_price": 0.05,
+    "theoretical": 0.040000000000000036,
+    "slippage": 0.24999999999999897,
+    "size": 1.0,
+    "cost": 0.05
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T14:50:17.049941+00:00",
+    "market_id": "2107037",
+    "question": "Will the price of Bitcoin be above $76,000 on May 5?",
+    "fill_price": 0.021,
+    "theoretical": 0.028000000000000025,
+    "slippage": -0.2500000000000006,
+    "size": 1.0,
+    "cost": 0.021
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T15:31:03.253310+00:00",
+    "market_id": "2137403",
+    "question": "Will the highest temperature in Warsaw be 27\u00b0C on May 4?",
+    "fill_price": 0.019,
+    "theoretical": 0.018000000000000016,
+    "slippage": 0.055555555555554595,
+    "size": 1.0,
+    "cost": 0.019
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T15:56:14.722156+00:00",
+    "market_id": "2040037",
+    "question": "Will Nottingham Forest FC win on 2026-05-04?",
+    "fill_price": 0.003,
+    "theoretical": 0.017000000000000015,
+    "slippage": -0.8235294117647061,
+    "size": 1.0,
+    "cost": 0.003
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T17:01:49.056454+00:00",
+    "market_id": "2074254",
+    "question": "Will Natural Gas (NG) hit (HIGH) $3.00 in May?",
+    "fill_price": 0.019,
+    "theoretical": 0.015000000000000013,
+    "slippage": 0.2666666666666655,
+    "size": 1.0,
+    "cost": 0.019
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T17:01:49.280598+00:00",
+    "market_id": "2148765",
+    "question": "Will the price of Bitcoin be above $70,000 on May 10?",
+    "fill_price": 0.02,
+    "theoretical": 0.01749999999999996,
+    "slippage": 0.14285714285714549,
+    "size": 1.0,
+    "cost": 0.02
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T17:52:18.600137+00:00",
+    "market_id": "2137143",
+    "question": "Will the highest temperature in London be 15\u00b0C on May 4?",
+    "fill_price": 0.055,
+    "theoretical": 0.03849999999999998,
+    "slippage": 0.4285714285714294,
+    "size": 1.0,
+    "cost": 0.055
   }
 ]
