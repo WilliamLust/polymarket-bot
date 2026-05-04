@@ -1,0 +1,46 @@
+[
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T13:34:49.795085+00:00",
+    "market_id": "2137535",
+    "question": "Will the highest temperature in Moscow be 25\u00b0C on May 4?",
+    "fill_price": 0.017,
+    "theoretical": 0.014000000000000012,
+    "slippage": 0.2142857142857133,
+    "size": 1.0,
+    "cost": 0.017
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T13:34:50.042216+00:00",
+    "market_id": "1970638",
+    "question": "Will Firecracker die in \"The Boys: Season 5\"?",
+    "fill_price": 0.028,
+    "theoretical": 0.020499999999999963,
+    "slippage": 0.36585365853658786,
+    "size": 1.0,
+    "cost": 0.028
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T13:34:50.281952+00:00",
+    "market_id": "1909608",
+    "question": "Will Drake officially release Iceman by May 31, 2026?",
+    "fill_price": 0.03,
+    "theoretical": 0.026499999999999968,
+    "slippage": 0.13207547169811454,
+    "size": 1.0,
+    "cost": 0.03
+  },
+  {
+    "type": "ENTRY",
+    "time": "2026-05-04T13:34:50.568712+00:00",
+    "market_id": "577160",
+    "question": "Will Erling Haaland be the top goal scorer in the 2025\u201326 English Premier League season?",
+    "fill_price": 0.051,
+    "theoretical": 0.04249999999999998,
+    "slippage": 0.20000000000000043,
+    "size": 1.0,
+    "cost": 0.051
+  }
+]
