@@ -1,122 +1,117 @@
 # Polymarket Bot — RESTART.md
 
-## Project Status: Enhanced Backtest Complete
+## Project Status: Strategy Optimized with Realistic Fill Model
 
-The enhanced backtest with deduplication, slippage simulation, and all-market expansion is **complete**. Key script: `backtesting/enhanced_backtest.py`.
+**Last updated**: Session with orderbook-calibrated slippage integration
+**Git**: main branch, commit 2b08312 (+ uncommitted realistic slippage work)
 
-## Backtest Results Summary
+---
 
-### Baseline (dedup=first, slippage=0, all markets)
+## Key Finding: The Strategy Works, But Only at 95+¢
 
-| Metric | Value |
-|--------|-------|
-| Raw trades | 568,590,741 |
-| Deduped positions | 615,111 |
-| BUY_YES (<15¢) | 169,081 positions, 5.1% WR, +$2,177 |
-| BUY_NO (>45¢) | 347,311 positions, 43.2% WR, **+$17,391** |
-| Total P&L | +$19,567 |
-| Max drawdown | $98 |
+The flat slippage model was wrong. Orderbook-calibrated fills reveal that slippage varies wildly by bucket:
 
-### BUY_NO by Price Bucket (slippage=0)
+| YES Bucket | Slippage | Effect | Playable? |
+|-----------|----------|--------|-----------|
+| 45-55¢    | +16.7%   | Pay 58¢ for 50¢ NO — kills edge | NO |
+| 55-65¢    | +12.9%   | Moderate overpayment | Marginal |
+| 65-75¢    | +8.9%    | Slight overpayment | Marginal |
+| 75-85¢    | -8.0%    | Fills BELOW theoretical | YES |
+| 85-95¢    | +63.8%   | Pay 16¢ for 10¢ NO — but 29% WR beats 17% breakeven | YES |
+| 95-100¢   | -65.1%   | Pay 0.56¢ for 1.58¢ NO — huge advantage | YES |
 
-| Bucket | Positions | Win Rate | P&L |
-|--------|-----------|----------|-----|
-| 45-55¢ | 214,842 | 53.8% | +$6,084 |
-| 55-65¢ | 29,517 | 48.8% | +$1,894 |
-| 65-75¢ | 16,778 | 38.9% | +$1,235 |
-| 75-85¢ | 13,472 | 31.8% | +$1,388 |
-| 85-95¢ | 13,349 | 29.3% | +$2,498 |
-| 95-100¢ | 59,353 | 9.0% | +$4,292 |
+### Why negative slippage at 95-100¢?
+YES and NO trade on separate orderbooks. At 95¢ YES, the NO ask sits at ~0.56¢ — below the implied 5¢ (1 - 0.95). This happens because YES market makers leave a spread, and NO liquidity providers compete at very tight levels. You get filled at essentially zero cost.
 
-### Slippage Sensitivity
+---
 
-| Slippage | BUY_NO P&L | Overall P&L | Max DD | Verdict |
-|----------|------------|-------------|--------|---------|
-| 0¢ | +$17,391 | +$19,567 | $98 | ★ STRONG EDGE |
-| 3¢ | +$6,971 | +$4,076 | $5,016 | ★ STRONG EDGE (but 45-55¢ bucket flips negative: -$361) |
-| 5¢ | +$25 | -$6,252 | $13,171 | ◆ MARGINAL — edge destroyed |
-
-**Critical insight**: At 3¢ slippage, the 45-55¢ bucket goes negative (-$361). At 5¢, the entire BUY_NO edge collapses to +$25. The edge is extremely slippage-sensitive, concentrated in the high-YES-price buckets where NO fill costs are tiny (5-15¢) but slippage is a large % of cost.
-
-### BUY_NO P&L by Category (slippage=0)
-
-| Category | Positions | WR | P&L |
-|----------|-----------|-----|-----|
-| other | 150,029 | 43.6% | +$9,655 |
-| crypto | 127,703 | 49.6% | +$2,744 |
-| sports | 39,816 | 23.3% | +$1,979 |
-| politics_us | 6,679 | 41.9% | +$886 |
-| tech | 10,306 | 38.3% | +$789 |
-| politics_world | 5,768 | 40.8% | +$505 |
-| weather | 2,852 | 47.6% | +$407 |
-| entertainment | 2,195 | 29.5% | +$235 |
-| science | 1,537 | 45.5% | +$102 |
-| economics | 351 | 53.3% | +$81 |
-| covid | 75 | 42.7% | +$8 |
-
-**All categories profitable.** "Other" category dominates volume/P&L. Crypto has highest WR (49.6%). Sports has lowest WR (23.3%) but still profitable because the 95-100¢ bucket (5.5% WR, +$892) is huge volume (22K positions).
-
-### Weather-Only (dedup=first, slippage=0)
+## Final Strategy: BUY_NO at YES >= 95¢ Only
 
 | Metric | Value |
 |--------|-------|
-| Positions | 2,850 BUY_NO |
-| WR | 47.6% |
-| P&L | +$405 |
-| 95-100¢ bucket | 568 pos, 18.0% WR, +$90 |
+| Positions | 59,353 |
+| Win rate | 9.0% |
+| Avg fill | 0.56¢ (theoretical: 1.58¢) |
+| Slippage advantage | +1.02¢ per position vs theoretical |
+| P&L at $1/pos | +$4,898 |
+| P&L at $10/pos | +$48,980 |
+| P&L at $50/pos | +$244,901 |
+| Max drawdown at $10/pos | $2,868 |
+| Sharpe ratio | 0.295 |
 
-Compared to original weather_backtest (5.99M trades, no dedup): the edge survives dedup at +$405 instead of +$37,969. The 324x reduction in trade count is the key — we went from counting every price update as a separate trade to one position per market.
+### By Category (95-100¢ bucket, $10/position):
+| Category | Count | WR | P&L |
+|----------|-------|----|----|
+| other | 30,690 | 10.3% | +$29,379 |
+| sports | 19,605 | 5.3% | +$9,270 |
+| crypto | 5,445 | 9.1% | +$4,524 |
+| tech | 2,377 | 12.7% | +$2,778 |
+| politics_us | 602 | 32.4% | +$1,857 |
+| weather | 565 | 17.9% | +$954 |
+| economics | 69 | 33.3% | +$220 |
 
-### Sports-Only (dedup=first, slippage=0)
+### Entry Threshold Optimization:
+| Min YES | Positions | WR | P&L $10 | MaxDD $10 |
+|---------|-----------|----|---------|-----------|
+| 0.45 | 350K | 43.4% | -$27,372 | $725K |
+| 0.55 | 132K | 26.0% | +$92,498 | $140K |
+| 0.65 | 103K | 19.5% | +$89,336 | $70K |
+| 0.75 | 86K | 15.7% | +$81,586 | $36K |
+| 0.85 | 73K | 12.7% | +$65,456 | $18K |
+| 0.95 | 59K | 9.0% | +$48,980 | $3K |
+| 0.99 | 38K | 5.5% | +$19,253 | $1K |
 
-| Metric | Value |
-|--------|-------|
-| Positions | 39,816 BUY_NO |
-| WR | 23.3% |
-| P&L | +$1,979 |
-| 95-100¢ bucket | 22,126 pos (!), 5.5% WR, +$892 |
+Higher threshold = lower P&L but MUCH lower drawdown. 95¢ is the sweet spot.
 
-Sports is dominated by the 95-100¢ bucket — 22K of 40K positions. Very low WR (5.5%) but still net positive because the payout asymmetry (5¢ cost → $0.93 net win) compensates.
+---
 
-### Crypto-Only (dedup=first, slippage=0)
+## Other Buckets Worth Playing
 
-| Metric | Value |
-|--------|-------|
-| Positions | 127,703 BUY_NO |
-| WR | 49.6% |
-| P&L | +$2,744 |
-| 45-55¢ bucket | 115,273 pos (!), 52.1% WR, +$1,393 |
+**75-85¢ bucket**: Negative slippage (-8%), fills at 19.2¢ vs 20.9¢ theoretical. Breakeven WR 19.6%, actual WR 31.8%. Comfortable edge. 13,472 positions.
 
-Crypto is the cleanest edge — near-coin-flip markets where buying NO at >45¢ gives 49.6% WR. Most positions are in the 45-55¢ range (near 50/50 odds).
+**85-95¢ bucket**: Despite 63.8% slippage (paying 16.4¢ for 10¢ NO), breakeven WR is only 16.7% and actual WR is 29.3%. Still profitable, but thin. 13,349 positions.
 
-## Key Findings
+---
 
-1. **Dedup kills the headline number but the edge survives**: +$37,969 (weather, no dedup) → +$405 (weather, deduped). +$17,391 (all markets, deduped). The original 5.99M "trades" were 324x overcounted.
+## Data Sources
 
-2. **The edge is real across all categories**: Every category is net positive at 0 slippage. "Other" (uncategorized markets) dominates P&L.
+- **quant.parquet**: 36GB, 568.6M trades, 577 row groups. Deduped to 615K (1/market, keep=first)
+- **markets.parquet**: 735K markets, 734K resolved (YES/NO)
+- **orderbook_depth_calibration.json**: 39 live CLOB snapshots, 6 price buckets
+- Slippage model: `actual_no_cost = theoretical * (1 + bucket_slippage_pct)`
 
-3. **Slippage is the existential threat**: At 3¢ slippage, total P&L drops from +$19.6K to +$4.1K. At 5¢, it's gone. The 45-55¢ bucket flips negative at just 3¢. The 95-100¢ bucket is the most resilient (+$2,512 at 3¢, +$1,325 at 5¢) but can't carry the full strategy alone.
+---
 
-4. **The 95-100¢ bucket is where the asymmetry lives**: 59K positions, 9% WR, but each win pays ~19x the cost. This is the "long tail" trade — buy NO at 5¢, win $0.93. At 3¢ slippage (8¢ cost), you still net +$0.85 on wins but lose more on losses.
+## Files
 
-5. **Max drawdown is tiny at 0 slippage ($98) but explodes with slippage**: $5K at 3¢, $13K at 5¢. This is because slippage turns many marginal wins into losses.
+| File | Purpose |
+|------|---------|
+| `backtesting/enhanced_backtest.py` | Dedup + flat slippage + all-category |
+| `backtesting/realistic_slippage_backtest.py` | Orderbook-calibrated fill model |
+| `backtesting/strategy_optimizer.py` | Entry threshold optimization |
+| `backtesting/fetch_orderbook_depth.py` | Live orderbook sampler |
+| `backtesting/orderbook_depth_calibration.json` | 39 calibration snapshots |
+| `backtesting/weather_backtest.py` | Original (overcounted) weather backtest |
 
-## Data Pipeline
+---
 
-- **quant.parquet**: 568.6M rows, 577 row groups, ~36GB. Uses `drop_duplicates` per row group with periodic merging (every 100 RGs) to bound memory.
-- **markets.parquet**: 734,790 total markets, 734,521 resolved. 11 categories via regex on market question/slug.
-- **Scan time**: ~57-74s for all-market dedup. ~73s for weather-only.
+## Caveats & Risks
 
-## Scripts
+1. **Calibration sample is small** — only 39 orderbook snapshots. 36/75 failed (resolved/inactive markets). Should re-sample with active markets only.
+2. **No historical orderbook data** — current live slippage applied to 4+ years of historical trades. Market microstructure may have changed.
+3. **Survivorship bias** — we only see resolved markets. Cancelled/voided markets excluded.
+4. **US residents can't trade** — ToS restriction. Backtesting only.
+5. **The $100/pos P&L of $490K is unrealistic** — at $100/position, you eat through the orderbook. The $98K depth at best ask evaporates fast with size.
+6. **Negative slippage is suspicious** — paying less than theoretical sounds great but may be a sampling artifact. Need more data points.
+7. **Strategy is well-known** — other bots likely already arbing this edge. Live performance will be worse.
 
-- `backtesting/enhanced_backtest.py` — Main script with `--dedup`, `--slippage`, `--category` flags
-- `backtesting/weather_backtest.py` — Original weather-only (no dedup)
-- `backtesting/load_data.py` — Shared data loading utilities
+---
 
 ## Next Steps
 
-1. **Slippage modeling**: Current slippage is uniform (additive). Real slippage depends on orderbook depth and market liquidity. Need orderbook data for realistic fills.
-2. **Position sizing**: Current model uses $1 per trade. Kelly criterion or fractional sizing would improve risk-adjusted returns.
-3. **Time-based analysis**: The edge is concentrated in recent months (2026-01 through 2026-03 = +$14.6K of +$19.6K total). Is this a regime change or growing pains?
-4. **Live API integration**: The Polymarket CLOB API for real-time pricing and orderbook depth.
-5. **Category filtering**: Sports 95-100¢ bucket (5.5% WR) vs crypto 45-55¢ bucket (52% WR) — different risk profiles. Strategy could filter by category + bucket.
+1. **Re-sample orderbooks with active markets only** — filter `active=true` before querying CLOB API
+2. **Build live paper-trading bot** — deploy with $1 positions to validate fill assumptions
+3. **Size-aware slippage model** — model fill price as function of order size × bucket depth
+4. **Combine 75-85 + 95-100 buckets** — both have favorable slippage; blended strategy
+5. **Time-of-day analysis** — slippage may vary with market hours/liquidity
+6. **Void market handling** — some resolved markets get voided (refund). Need to handle these.

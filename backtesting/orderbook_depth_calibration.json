@@ -1,0 +1,743 @@
+[
+  {
+    "market_id": "540819",
+    "question": "Will Jesus Christ return before GTA VI?",
+    "yes_price": 0.485,
+    "no_best_ask": 0.52,
+    "no_best_ask_size": 140415.58,
+    "no_spread_bps": 50.0,
+    "num_ask_levels": 26,
+    "total_ask_depth": 2190506.03,
+    "depth_at": {
+      "10": 0.52,
+      "50": 0.52,
+      "100": 0.52,
+      "250": 0.52,
+      "500": 0.52,
+      "1000": 0.52
+    },
+    "bucket": "0.45-0.55"
+  },
+  {
+    "market_id": "540844",
+    "question": "Will bitcoin hit $1m before GTA VI?",
+    "yes_price": 0.489,
+    "no_best_ask": 0.511,
+    "no_best_ask_size": 2169.06,
+    "no_spread_bps": 0.0,
+    "num_ask_levels": 44,
+    "total_ask_depth": 13358494.79,
+    "depth_at": {
+      "10": 0.511,
+      "50": 0.511,
+      "100": 0.511,
+      "250": 0.511,
+      "500": 0.511,
+      "1000": 0.511
+    },
+    "bucket": "0.45-0.55"
+  },
+  {
+    "market_id": "701502",
+    "question": "Will Bitcoin dip to $45,000 by December 31, 2026?",
+    "yes_price": 0.505,
+    "no_best_ask": 0.72,
+    "no_best_ask_size": 986.12,
+    "no_spread_bps": 2250.0,
+    "num_ask_levels": 28,
+    "total_ask_depth": 395891.73,
+    "depth_at": {
+      "10": 0.72,
+      "50": 0.72,
+      "100": 0.72,
+      "250": 0.72,
+      "500": 0.72,
+      "1000": 0.7212
+    },
+    "bucket": "0.45-0.55"
+  },
+  {
+    "market_id": "540843",
+    "question": "Will China invades Taiwan before GTA VI?",
+    "yes_price": 0.515,
+    "no_best_ask": 0.5,
+    "no_best_ask_size": 7246.33,
+    "no_spread_bps": 150.0,
+    "num_ask_levels": 32,
+    "total_ask_depth": 40444.18,
+    "depth_at": {
+      "10": 0.5,
+      "50": 0.5,
+      "100": 0.5,
+      "250": 0.5,
+      "500": 0.5,
+      "1000": 0.5
+    },
+    "bucket": "0.45-0.55"
+  },
+  {
+    "market_id": "540816",
+    "question": "Russia-Ukraine Ceasefire before GTA VI?",
+    "yes_price": 0.545,
+    "no_best_ask": 0.46,
+    "no_best_ask_size": 892.55,
+    "no_spread_bps": 50.0,
+    "num_ask_levels": 35,
+    "total_ask_depth": 2128693.71,
+    "depth_at": {
+      "10": 0.46,
+      "50": 0.46,
+      "100": 0.46,
+      "250": 0.46,
+      "500": 0.46,
+      "1000": 0.4683
+    },
+    "bucket": "0.45-0.55"
+  },
+  {
+    "market_id": "898411",
+    "question": "Will George Russell be the 2026 F1 Drivers' Champion?",
+    "yes_price": 0.465,
+    "no_best_ask": 0.74,
+    "no_best_ask_size": 1624.8,
+    "no_spread_bps": 2050.0,
+    "num_ask_levels": 23,
+    "total_ask_depth": 503754.53,
+    "depth_at": {
+      "10": 0.74,
+      "50": 0.74,
+      "100": 0.74,
+      "250": 0.74,
+      "500": 0.74,
+      "1000": 0.74
+    },
+    "bucket": "0.45-0.55"
+  },
+  {
+    "market_id": "562828",
+    "question": "2026 Balance of Power: D Senate, D House",
+    "yes_price": 0.505,
+    "no_best_ask": 0.52,
+    "no_best_ask_size": 4707.36,
+    "no_spread_bps": 250.0,
+    "num_ask_levels": 22,
+    "total_ask_depth": 1161953.23,
+    "depth_at": {
+      "10": 0.52,
+      "50": 0.52,
+      "100": 0.52,
+      "250": 0.52,
+      "500": 0.52,
+      "1000": 0.52
+    },
+    "bucket": "0.45-0.55"
+  },
+  {
+    "market_id": "556108",
+    "question": "Will MegaETH perform an airdrop by June 30? ",
+    "yes_price": 0.452,
+    "no_best_ask": 0.741,
+    "no_best_ask_size": 149.0,
+    "no_spread_bps": 1930.0,
+    "num_ask_levels": 32,
+    "total_ask_depth": 50932.82,
+    "depth_at": {
+      "10": 0.741,
+      "50": 0.741,
+      "100": 0.741,
+      "250": 0.7431,
+      "500": 0.7431,
+      "1000": 0.7719
+    },
+    "bucket": "0.45-0.55"
+  },
+  {
+    "market_id": "567561",
+    "question": "Will the next Prime Minister of Hungary be P\u00e9ter Magyar?",
+    "yes_price": 0.625,
+    "no_best_ask": 0.004,
+    "no_best_ask_size": 177601.11,
+    "no_spread_bps": -3710.0,
+    "num_ask_levels": 63,
+    "total_ask_depth": 695345.84,
+    "depth_at": {
+      "10": 0.004,
+      "50": 0.004,
+      "100": 0.004,
+      "250": 0.004,
+      "500": 0.004,
+      "1000": 0.004
+    },
+    "bucket": "0.55-0.65"
+  },
+  {
+    "market_id": "562186",
+    "question": "Will Ken Paxton win the 2026 Texas Republican Primary?",
+    "yes_price": 0.635,
+    "no_best_ask": 0.44,
+    "no_best_ask_size": 37.6,
+    "no_spread_bps": 750.0,
+    "num_ask_levels": 30,
+    "total_ask_depth": 27215.7,
+    "depth_at": {
+      "10": 0.44,
+      "50": 0.4568,
+      "100": 0.4568,
+      "250": 0.4568,
+      "500": 0.4658,
+      "1000": 0.4861
+    },
+    "bucket": "0.55-0.65"
+  },
+  {
+    "market_id": "665374",
+    "question": "Will the U.S. invade Iran before 2027?",
+    "yes_price": 0.59,
+    "no_best_ask": 0.7,
+    "no_best_ask_size": 22988.05,
+    "no_spread_bps": 2900.0,
+    "num_ask_levels": 30,
+    "total_ask_depth": 3378104.17,
+    "depth_at": {
+      "10": 0.7,
+      "50": 0.7,
+      "100": 0.7,
+      "250": 0.7,
+      "500": 0.7,
+      "1000": 0.7
+    },
+    "bucket": "0.55-0.65"
+  },
+  {
+    "market_id": "1105742",
+    "question": "Will Delcy Rodr\u00edguez be the leader of Venezuela end of 2026?",
+    "yes_price": 0.635,
+    "no_best_ask": 0.77,
+    "no_best_ask_size": 4309.04,
+    "no_spread_bps": 4050.0,
+    "num_ask_levels": 21,
+    "total_ask_depth": 59738.44,
+    "depth_at": {
+      "10": 0.77,
+      "50": 0.77,
+      "100": 0.77,
+      "250": 0.77,
+      "500": 0.77,
+      "1000": 0.77
+    },
+    "bucket": "0.55-0.65"
+  },
+  {
+    "market_id": "1298649",
+    "question": "OpenAI IPO closing market cap above $1T?",
+    "yes_price": 0.575,
+    "no_best_ask": 0.4,
+    "no_best_ask_size": 42.36,
+    "no_spread_bps": -250.0,
+    "num_ask_levels": 28,
+    "total_ask_depth": 3948.03,
+    "depth_at": {
+      "10": 0.4,
+      "50": 0.4093,
+      "100": 0.4093,
+      "250": 0.4093,
+      "500": 0.4093,
+      "1000": 0.4356
+    },
+    "bucket": "0.55-0.65"
+  },
+  {
+    "market_id": "1469737",
+    "question": "Will Mojtaba Khamenei be head of state in Iran end of 2026?",
+    "yes_price": 0.5825,
+    "no_best_ask": 0.348,
+    "no_best_ask_size": 183.9,
+    "no_spread_bps": -695.0,
+    "num_ask_levels": 50,
+    "total_ask_depth": 2148800.81,
+    "depth_at": {
+      "10": 0.348,
+      "50": 0.348,
+      "100": 0.348,
+      "250": 0.349,
+      "500": 0.3517,
+      "1000": 0.3517
+    },
+    "bucket": "0.55-0.65"
+  },
+  {
+    "market_id": "1005343",
+    "question": "Puffpaw FDV above $50M one day after launch?",
+    "yes_price": 0.675,
+    "no_best_ask": 0.35,
+    "no_best_ask_size": 16.11,
+    "no_spread_bps": 250.0,
+    "num_ask_levels": 23,
+    "total_ask_depth": 27435.97,
+    "depth_at": {
+      "10": 0.35,
+      "50": 0.3793,
+      "100": 0.3894,
+      "250": 0.4285,
+      "500": 0.5079,
+      "1000": 0.5079
+    },
+    "bucket": "0.65-0.75"
+  },
+  {
+    "market_id": "1130012",
+    "question": "Will United Russia (ER) gain the most seats in the next Russ",
+    "yes_price": 0.705,
+    "no_best_ask": 0.35,
+    "no_best_ask_size": 584.62,
+    "no_spread_bps": 550.0,
+    "num_ask_levels": 20,
+    "total_ask_depth": 85732.67,
+    "depth_at": {
+      "10": 0.35,
+      "50": 0.35,
+      "100": 0.35,
+      "250": 0.35,
+      "500": 0.35,
+      "1000": 0.3592
+    },
+    "bucket": "0.65-0.75"
+  },
+  {
+    "market_id": "679492",
+    "question": "Will Choo Mi-ae win the 2026 Gyeonggi Province Gubernatorial",
+    "yes_price": 0.7065,
+    "no_best_ask": 0.089,
+    "no_best_ask_size": 20.0,
+    "no_spread_bps": -2045.0,
+    "num_ask_levels": 37,
+    "total_ask_depth": 80226.89,
+    "depth_at": {
+      "10": 0.089,
+      "50": 0.0898,
+      "100": 0.0898,
+      "250": 0.0909,
+      "500": 0.0909,
+      "1000": 0.0909
+    },
+    "bucket": "0.65-0.75"
+  },
+  {
+    "market_id": "701552",
+    "question": "Will Ethereum dip to $1,500 by December 31, 2026?",
+    "yes_price": 0.675,
+    "no_best_ask": 0.56,
+    "no_best_ask_size": 9950.4,
+    "no_spread_bps": 2350.0,
+    "num_ask_levels": 27,
+    "total_ask_depth": 2127626.81,
+    "depth_at": {
+      "10": 0.56,
+      "50": 0.56,
+      "100": 0.56,
+      "250": 0.56,
+      "500": 0.56,
+      "1000": 0.56
+    },
+    "bucket": "0.65-0.75"
+  },
+  {
+    "market_id": "564162",
+    "question": "Will Shai Gilgeous-Alexander win the 2025\u20132026 NBA MVP?",
+    "yes_price": 0.785,
+    "no_best_ask": 0.023,
+    "no_best_ask_size": 204.0,
+    "no_spread_bps": -1920.0,
+    "num_ask_levels": 25,
+    "total_ask_depth": 140856.59,
+    "depth_at": {
+      "10": 0.023,
+      "50": 0.023,
+      "100": 0.023,
+      "250": 0.0234,
+      "500": 0.025,
+      "1000": 0.025
+    },
+    "bucket": "0.75-0.85"
+  },
+  {
+    "market_id": "562802",
+    "question": "Will the Democratic Party control the House after the 2026 M",
+    "yes_price": 0.845,
+    "no_best_ask": 0.17,
+    "no_best_ask_size": 8118.93,
+    "no_spread_bps": 150.0,
+    "num_ask_levels": 42,
+    "total_ask_depth": 2361068.29,
+    "depth_at": {
+      "10": 0.17,
+      "50": 0.17,
+      "100": 0.17,
+      "250": 0.17,
+      "500": 0.17,
+      "1000": 0.17
+    },
+    "bucket": "0.75-0.85"
+  },
+  {
+    "market_id": "566228",
+    "question": "Will Barcelona win the 2025\u201326 La Liga?",
+    "yes_price": 0.755,
+    "no_best_ask": 0.006,
+    "no_best_ask_size": 2301.86,
+    "no_spread_bps": -2390.0,
+    "num_ask_levels": 24,
+    "total_ask_depth": 2241197.78,
+    "depth_at": {
+      "10": 0.006,
+      "50": 0.006,
+      "100": 0.006,
+      "250": 0.006,
+      "500": 0.006,
+      "1000": 0.006
+    },
+    "bucket": "0.75-0.85"
+  },
+  {
+    "market_id": "701501",
+    "question": "Will Bitcoin dip to $55,000 by December 31, 2026?",
+    "yes_price": 0.765,
+    "no_best_ask": 0.53,
+    "no_best_ask_size": 252.73,
+    "no_spread_bps": 2950.0,
+    "num_ask_levels": 29,
+    "total_ask_depth": 2963464.1,
+    "depth_at": {
+      "10": 0.53,
+      "50": 0.53,
+      "100": 0.53,
+      "250": 0.53,
+      "500": 0.5368,
+      "1000": 0.5464
+    },
+    "bucket": "0.75-0.85"
+  },
+  {
+    "market_id": "1611527",
+    "question": "Will Trump visit China by May 31?",
+    "yes_price": 0.755,
+    "no_best_ask": 0.08,
+    "no_best_ask_size": 18624.55,
+    "no_spread_bps": -1650.0,
+    "num_ask_levels": 47,
+    "total_ask_depth": 154160.13,
+    "depth_at": {
+      "10": 0.08,
+      "50": 0.08,
+      "100": 0.08,
+      "250": 0.08,
+      "500": 0.08,
+      "1000": 0.08
+    },
+    "bucket": "0.75-0.85"
+  },
+  {
+    "market_id": "631181",
+    "question": "Will NVIDIA be the largest company in the world by market ca",
+    "yes_price": 0.79,
+    "no_best_ask": 0.32,
+    "no_best_ask_size": 634.27,
+    "no_spread_bps": 1100.0,
+    "num_ask_levels": 50,
+    "total_ask_depth": 1427905.62,
+    "depth_at": {
+      "10": 0.32,
+      "50": 0.32,
+      "100": 0.32,
+      "250": 0.32,
+      "500": 0.32,
+      "1000": 0.3279
+    },
+    "bucket": "0.75-0.85"
+  },
+  {
+    "market_id": "898660",
+    "question": "Will Mercedes be the 2026 F1 Constructors' Champion?",
+    "yes_price": 0.785,
+    "no_best_ask": 0.27,
+    "no_best_ask_size": 48.7,
+    "no_spread_bps": 550.0,
+    "num_ask_levels": 34,
+    "total_ask_depth": 2875499.22,
+    "depth_at": {
+      "10": 0.27,
+      "50": 0.2781,
+      "100": 0.2781,
+      "250": 0.2781,
+      "500": 0.2952,
+      "1000": 0.2952
+    },
+    "bucket": "0.75-0.85"
+  },
+  {
+    "market_id": "566187",
+    "question": "Will Arsenal win the 2025\u201326 English Premier League?",
+    "yes_price": 0.885,
+    "no_best_ask": 0.39,
+    "no_best_ask_size": 11719.24,
+    "no_spread_bps": 2750.0,
+    "num_ask_levels": 27,
+    "total_ask_depth": 82820.04,
+    "depth_at": {
+      "10": 0.39,
+      "50": 0.39,
+      "100": 0.39,
+      "250": 0.39,
+      "500": 0.39,
+      "1000": 0.39
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "599323",
+    "question": "Will Graham Platner be the Democratic nominee for Senate in ",
+    "yes_price": 0.855,
+    "no_best_ask": 0.012,
+    "no_best_ask_size": 391.23,
+    "no_spread_bps": -1330.0,
+    "num_ask_levels": 35,
+    "total_ask_depth": 43842.95,
+    "depth_at": {
+      "10": 0.012,
+      "50": 0.012,
+      "100": 0.012,
+      "250": 0.012,
+      "500": 0.0129,
+      "1000": 0.0129
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "1451224",
+    "question": "Will Mette Frederiksen be the next prime minister of Denmark",
+    "yes_price": 0.875,
+    "no_best_ask": 0.07,
+    "no_best_ask_size": 4664.53,
+    "no_spread_bps": -550.0,
+    "num_ask_levels": 17,
+    "total_ask_depth": 31235.19,
+    "depth_at": {
+      "10": 0.07,
+      "50": 0.07,
+      "100": 0.07,
+      "250": 0.07,
+      "500": 0.07,
+      "1000": 0.07
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "906974",
+    "question": "Will there be no change in Fed interest rates after the June",
+    "yes_price": 0.885,
+    "no_best_ask": 0.05,
+    "no_best_ask_size": 67280.51,
+    "no_spread_bps": -650.0,
+    "num_ask_levels": 50,
+    "total_ask_depth": 3159245.63,
+    "depth_at": {
+      "10": 0.05,
+      "50": 0.05,
+      "100": 0.05,
+      "250": 0.05,
+      "500": 0.05,
+      "1000": 0.05
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "618509",
+    "question": "Will Trump and Putin not meet?",
+    "yes_price": 0.8535,
+    "no_best_ask": 0.075,
+    "no_best_ask_size": 6.52,
+    "no_spread_bps": -715.0,
+    "num_ask_levels": 41,
+    "total_ask_depth": 1264480.28,
+    "depth_at": {
+      "10": 0.0759,
+      "50": 0.0759,
+      "100": 0.0833,
+      "250": 0.1032,
+      "500": 0.112,
+      "1000": 0.1271
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "842092",
+    "question": "Will SpaceX's market cap be greater than $1T at market close",
+    "yes_price": 0.94,
+    "no_best_ask": 0.08,
+    "no_best_ask_size": 298.53,
+    "no_spread_bps": 200.0,
+    "num_ask_levels": 30,
+    "total_ask_depth": 128256.49,
+    "depth_at": {
+      "10": 0.08,
+      "50": 0.08,
+      "100": 0.08,
+      "250": 0.08,
+      "500": 0.0856,
+      "1000": 0.1002
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "676795",
+    "question": "SpaceX (Space Exploration Technologies Corp.) IPO before 202",
+    "yes_price": 0.89,
+    "no_best_ask": 0.061,
+    "no_best_ask_size": 278.0,
+    "no_spread_bps": -490.0,
+    "num_ask_levels": 32,
+    "total_ask_depth": 632107.2,
+    "depth_at": {
+      "10": 0.061,
+      "50": 0.061,
+      "100": 0.061,
+      "250": 0.061,
+      "500": 0.0619,
+      "1000": 0.0619
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "1121887",
+    "question": "Israel strike on Yemen by June 30, 2026?",
+    "yes_price": 0.865,
+    "no_best_ask": 0.77,
+    "no_best_ask_size": 7.0,
+    "no_spread_bps": 6350.0,
+    "num_ask_levels": 18,
+    "total_ask_depth": 13254.16,
+    "depth_at": {
+      "10": 0.7789,
+      "50": 0.7789,
+      "100": 0.7838,
+      "250": 0.7962,
+      "500": 0.8107,
+      "1000": 0.828
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "677366",
+    "question": "Will Russia capture Kostyantynivka by December 31, 2026?",
+    "yes_price": 0.875,
+    "no_best_ask": 0.23,
+    "no_best_ask_size": 464.42,
+    "no_spread_bps": 1050.0,
+    "num_ask_levels": 30,
+    "total_ask_depth": 107685.41,
+    "depth_at": {
+      "10": 0.23,
+      "50": 0.23,
+      "100": 0.23,
+      "250": 0.23,
+      "500": 0.2393,
+      "1000": 0.2393
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "676780",
+    "question": "Cerebras IPO before 2027?",
+    "yes_price": 0.917,
+    "no_best_ask": 0.01,
+    "no_best_ask_size": 2964.63,
+    "no_spread_bps": -730.0,
+    "num_ask_levels": 24,
+    "total_ask_depth": 25000.16,
+    "depth_at": {
+      "10": 0.01,
+      "50": 0.01,
+      "100": 0.01,
+      "250": 0.01,
+      "500": 0.01,
+      "1000": 0.01
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "1068623",
+    "question": "Altcoin market cap dip to $150B before 2027?",
+    "yes_price": 0.86,
+    "no_best_ask": 0.38,
+    "no_best_ask_size": 110.64,
+    "no_spread_bps": 2400.0,
+    "num_ask_levels": 17,
+    "total_ask_depth": 114511.15,
+    "depth_at": {
+      "10": 0.38,
+      "50": 0.38,
+      "100": 0.38,
+      "250": 0.3966,
+      "500": 0.4338,
+      "1000": 0.4338
+    },
+    "bucket": "0.85-0.95"
+  },
+  {
+    "market_id": "1500754",
+    "question": "Will Kevin Warsh be confirmed as Fed Chair?",
+    "yes_price": 0.953,
+    "no_best_ask": 0.004,
+    "no_best_ask_size": 284487.37,
+    "no_spread_bps": -430.0,
+    "num_ask_levels": 40,
+    "total_ask_depth": 900089.88,
+    "depth_at": {
+      "10": 0.004,
+      "50": 0.004,
+      "100": 0.004,
+      "250": 0.004,
+      "500": 0.004,
+      "1000": 0.004
+    },
+    "bucket": "0.95-1.01"
+  },
+  {
+    "market_id": "1125338",
+    "question": "Will no player win a Calendar Grand Slam in 2026?",
+    "yes_price": 0.9805,
+    "no_best_ask": 0.024,
+    "no_best_ask_size": 2.6,
+    "no_spread_bps": 45.0,
+    "num_ask_levels": 15,
+    "total_ask_depth": 413257.26,
+    "depth_at": {
+      "10": 0.025,
+      "50": 0.025,
+      "100": 0.025,
+      "250": 0.025,
+      "500": 0.0256,
+      "1000": 0.0289
+    },
+    "bucket": "0.95-1.01"
+  },
+  {
+    "market_id": "922766",
+    "question": "Will Scottish National Party win the most seats in the 2026 ",
+    "yes_price": 0.972,
+    "no_best_ask": 0.005,
+    "no_best_ask_size": 10584.53,
+    "no_spread_bps": -230.0,
+    "num_ask_levels": 45,
+    "total_ask_depth": 28580.39,
+    "depth_at": {
+      "10": 0.005,
+      "50": 0.005,
+      "100": 0.005,
+      "250": 0.005,
+      "500": 0.005,
+      "1000": 0.005
+    },
+    "bucket": "0.95-1.01"
+  }
+]
