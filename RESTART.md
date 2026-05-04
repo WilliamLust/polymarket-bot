@@ -1,21 +1,26 @@
 # Polymarket Bot — Restart Guide
 
-## Current Status: USDC DEPOSITED BUT WRONG TYPE — NEED BRIDGE API
+## Current Status: LIVE TRADING ACTIVE
 
-$49.40 native USDC is at the deposit wallet on Polygon, but **native USDC is PAUSED** on the
-CollateralOnramp. Only USDC.e can be wrapped into pUSD. The Bridge API at `bridge.polymarket.com`
-handles native USDC → pUSD conversion automatically.
+$49.39 pUSD is in the deposit wallet's CLOB balance. Exchange approvals are set. The live
+trader is running on VPS in loop mode (PID 72393, scans every 5 min).
 
-## What Just Happened (This Session)
+### What Was Completed (This Session)
 
-1. Verified $49.40 native USDC at deposit wallet via on-chain read (viem)
-2. Confirmed deposit wallet IS deployed (relayer returns deployed:true with type=WALLET)
-3. Fixed relayer batch payload format — switched to `executeDepositWalletBatch(calls, address, deadline)`
-4. Deadline must be a string with 1hr+ window (4min caused "deadline too soon")
-5. Batch submission hit "batch would revert" — root cause: **native USDC is paused on CollateralOnramp**
-6. Confirmed: `paused(USDC_NATIVE) = true`, `paused(USDC.e) = false`
-7. Found Bridge API at `bridge.polymarket.com` supports both USDC types on Polygon (chainId 137)
-8. Got bridge EVM deposit address: `0x21f6F035C913C9fE0525BF44B3555453867DCe2B`
+1. Wrote `live/bridge_transfer.js` — submits relayer batch to transfer USDC from deposit wallet to bridge
+2. Transferred $49.39 native USDC → bridge EVM address (TX: `0xb55ba...5f4e`, block 86403939, SUCCESS)
+3. Bridge auto-converted native USDC → pUSD (confirmed on-chain: 49.39 pUSD at deposit wallet)
+4. Set pUSD approvals for CTF Exchange V2 and NegRisk Exchange V2 (TX: `0xc2e76...4a99`)
+5. Set pUSD approval for NegRisk Adapter `0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296` (TX: `0xf37b9...f249`)
+6. Fixed live_trader_node.js balance check — replaced broken `/balances` endpoint with `getBalanceAllowance()`
+7. Verified CLOB balance: $49.39 with all approvals set
+8. Started live trader: `node live_trader_node.js --live --loop --interval=300 --position-size=1`
+
+### Current Market Conditions
+
+- No markets currently in the 0.95-0.99 YES price window (thin conditions)
+- Bot is scanning every 5 minutes and will auto-execute when qualifying markets appear
+- Only 2 markets above 0.85 YES with volume >5K as of the last check
 
 ## Key Discovery: Native USDC vs USDC.e
 
@@ -213,13 +218,10 @@ Repo: https://github.com/WilliamLust/polymarket-bot
 
 ## Remaining Work (Priority Order)
 
-1. **Submit relayer batch to transfer USDC to bridge address** — USDC.transfer(bridgeEvm, 49400000)
-2. **Wait for bridge processing** — monitor bridge.polymarket.com/status
-3. **Sync CLOB balance** — updateBalanceAllowance with POLY_1271
-4. **Go live** — node live_trader_node.js --live --loop --interval=300 --position-size=1
-5. **Monitor fill rates** — compare actual fills to backtest assumptions
-6. **Build systemd service** for Node.js bot (auto-restart, logging)
-7. **Scale position size** — after 50+ successful live positions, increase from $1
+1. **Monitor first live trades** — check positions.json after qualifying markets appear
+2. **Compare fill rates to backtest** — actual slippage vs modeled slippage
+3. **Build systemd service** for Node.js bot (auto-restart, logging)
+4. **Scale position size** — after 50+ successful live positions, increase from $1
 
 ## Polymarket Account
 
