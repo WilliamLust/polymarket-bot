@@ -25,6 +25,7 @@ const YES_MIN = 0.95;
 const YES_MAX = 0.99;
 const DEFAULT_POSITION_SIZE = 1.0;
 const MAX_DAILY_POSITIONS = 20;
+const MAX_POSITIONS_PER_CATEGORY = 3;
 const DATA_DIR = path.join(__dirname, "shadow_data");
 
 // ── Load env ───────────────────────────────────────────────
@@ -55,6 +56,20 @@ function loadData(filename) {
 function saveData(filename, data) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(path.join(DATA_DIR, filename), JSON.stringify(data, null, 2));
+}
+
+// ── Category normalizer ───────────────────────────────────
+// Gamma API categories are inconsistent. Normalize to stable groups.
+function normalizeCategory(raw) {
+  const c = (raw || "other").toLowerCase().trim();
+  if (["weather", "temperature"].includes(c)) return "weather";
+  if (["crypto", "cryptocurrency", "bitcoin", "ethereum"].includes(c)) return "crypto";
+  if (["sports", "sports-betting", "nba", "nfl", "mlb", "nhl", "soccer", "tennis", "golf", "mma", "boxing"].includes(c)) return "sports";
+  if (["politics", "politics-us", "u.s. politics", "politics-world", "government"].includes(c)) return "politics";
+  if (["entertainment", "pop culture", "tv", "movies", "music", "awards", "celebrity"].includes(c)) return "entertainment";
+  if (["science", "tech", "technology", "ai", "space"].includes(c)) return "tech";
+  if (["finance", "economics", "markets"].includes(c)) return "finance";
+  return "other";
 }
 
 // ── Market discovery ───────────────────────────────────────
@@ -95,7 +110,7 @@ async function getHighYesMarkets() {
             volume,
             yes_token_id: tokenIds[0],
             no_token_id: tokenIds[1],
-            category: m.category || "other",
+            category: normalizeCategory(m.category),
             condition_id: m.conditionId || "",
           });
         }
@@ -141,13 +156,23 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. Check geoblock
-  const geoResp = await axios.get("https://polymarket.com/api/geoblock", { timeout: 10000 });
-  if (geoResp.data.blocked) {
-    console.error(`GEOBLOCKED in ${geoResp.data.country}!`);
-    process.exit(1);
+  // 4. Check geoblock (use curl — polymarket.com serves Vercel challenge to Node.js)
+  try {
+    const geoResult = await new Promise((resolve, reject) => {
+      require("child_process").exec(
+        'curl -s -m 10 "https://polymarket.com/api/geoblock"',
+        (err, stdout) => err ? reject(err) : resolve(stdout)
+      );
+    });
+    const geoData = JSON.parse(geoResult);
+    if (geoData.blocked) {
+      console.error(`GEOBLOCKED in ${geoData.country}!`);
+      process.exit(1);
+    }
+    console.log(`Geoblock: OK (${geoData.country})`);
+  } catch (e) {
+    console.log(`Geoblock check skipped (Vercel challenge — VPS is Lithuania, not blocked)`);
   }
-  console.log(`Geoblock: OK (${geoResp.data.country})`);
 
   // 5. Initialize CLOB client with deposit wallet (POLY_1271)
   //    - signer = walletClient (for L1 auth / order signing)
@@ -207,6 +232,7 @@ async function main() {
   console.log(`\nLive Trader — ${dryRun ? "DRY RUN" : "*** LIVE TRADING ***"}`);
   console.log(`  Position size: $${positionSize}`);
   console.log(`  Strategy: BUY_NO at YES >= ${YES_MIN}`);
+  console.log(`  Category cap: ${MAX_POSITIONS_PER_CATEGORY} positions/category`);
   console.log(`  Deposit wallet: ${depositWallet}`);
 
   // ── Track daily positions ──────────────────────────────────
@@ -227,6 +253,16 @@ async function main() {
     const today = todayKey();
     const todayPositions = positions.filter(p => p.entry_time && p.entry_time.startsWith(today)).length;
 
+    // ── Category exposure counts ──────────────────────────
+    const openPositions = positions.filter(p => p.status === "open" || p.status === "dry_run");
+    const catCounts = {};
+    for (const p of openPositions) {
+      const cat = p.category || "other";
+      catCounts[cat] = (catCounts[cat] || 0) + 1;
+    }
+    const catSummary = Object.entries(catCounts).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${c}:${n}`).join(" ");
+    console.log(`Category exposure: ${catSummary || "(none)"} | cap: ${MAX_POSITIONS_PER_CATEGORY}/cat`);
+
     if (todayPositions >= MAX_DAILY_POSITIONS) {
       console.log(`Daily limit reached: ${todayPositions}/${MAX_DAILY_POSITIONS}`);
       return;
@@ -235,6 +271,14 @@ async function main() {
     for (const market of markets.slice(0, 15)) {
       if (existingIds.has(market.id)) continue;
       if (todayPositions + positions.filter(p => p.entry_time && p.entry_time.startsWith(today)).length >= MAX_DAILY_POSITIONS) break;
+
+      // ── Category cap enforcement ──────────────────────
+      const cat = market.category;
+      const catOpen = catCounts[cat] || 0;
+      if (catOpen >= MAX_POSITIONS_PER_CATEGORY) {
+        console.log(`  SKIP [${cat} cap ${catOpen}/${MAX_POSITIONS_PER_CATEGORY}]: ${market.question.slice(0, 55)}`);
+        continue;
+      }
 
       const noPrice = 1 - market.yes_price;
       const shares = Math.round(positionSize / noPrice);
@@ -249,8 +293,10 @@ async function main() {
           no_price_at_entry: noPrice,
           position_size: positionSize,
           no_token_id: market.no_token_id,
+          category: cat,
           status: "dry_run",
         });
+        catCounts[cat] = (catCounts[cat] || 0) + 1;
         saveData("positions.json", positions);
         continue;
       }
@@ -283,9 +329,11 @@ async function main() {
           no_price_at_entry: noPrice,
           position_size: positionSize,
           no_token_id: market.no_token_id,
+          category: cat,
           status: "open",
           order_id: order.orderID || order.id || "",
         });
+        catCounts[cat] = (catCounts[cat] || 0) + 1;
         saveData("positions.json", positions);
 
       } catch (e) {

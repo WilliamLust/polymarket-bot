@@ -11,7 +11,8 @@
     "entry_cost": 0.017,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "weather"
   },
   {
     "id": "1970638",
@@ -25,7 +26,8 @@
     "entry_cost": 0.028,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "entertainment"
   },
   {
     "id": "1909608",
@@ -39,7 +41,8 @@
     "entry_cost": 0.03,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "entertainment"
   },
   {
     "id": "577160",
@@ -53,7 +56,8 @@
     "entry_cost": 0.051,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "sports"
   },
   {
     "id": "2137314",
@@ -67,7 +71,8 @@
     "entry_cost": 0.05,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "weather"
   },
   {
     "id": "2097926",
@@ -81,7 +86,8 @@
     "entry_cost": 0.05,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "crypto"
   },
   {
     "id": "2107037",
@@ -95,7 +101,8 @@
     "entry_cost": 0.021,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "crypto"
   },
   {
     "id": "2137403",
@@ -109,7 +116,8 @@
     "entry_cost": 0.019,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "weather"
   },
   {
     "id": "2040037",
@@ -123,7 +131,8 @@
     "entry_cost": 0.003,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "other"
   },
   {
     "id": "2074254",
@@ -137,7 +146,8 @@
     "entry_cost": 0.019,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "other"
   },
   {
     "id": "2148765",
@@ -151,7 +161,8 @@
     "entry_cost": 0.02,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "crypto"
   },
   {
     "id": "2137143",
@@ -165,7 +176,8 @@
     "entry_cost": 0.055,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "weather"
   },
   {
     "id": "2132190",
@@ -179,6 +191,7 @@
     "entry_cost": 0.029,
     "status": "open",
     "resolution": null,
-    "pnl": null
+    "pnl": null,
+    "category": "finance"
   }
 ]
