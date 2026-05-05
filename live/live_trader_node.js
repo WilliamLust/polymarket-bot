@@ -37,6 +37,7 @@ const YES_MAX = 0.99;
 const DEFAULT_POSITION_SIZE = 1.0;
 const MAX_DAILY_POSITIONS = 20;
 const MAX_POSITIONS_PER_CATEGORY = 3;
+const MIN_HOURS_TO_CLOSE = 8;
 const DATA_DIR = path.join(__dirname, "shadow_data");
 
 // ── #2: Orderbook depth screen ─────────────────────────────
@@ -176,6 +177,7 @@ async function getHighYesMarkets() {
             no_token_id: tokenIds[1],
             category: normalizeCategory(m.category),
             condition_id: m.conditionId || "",
+            end_date: m.endDate || null,
           });
         }
       } catch {}
@@ -365,6 +367,7 @@ async function main() {
   console.log(`  Position size: $${positionSize} (default, Kelly may vary)`);
   console.log(`  Strategy: BUY_NO at YES >= ${YES_MIN}`);
   console.log(`  Category cap: ${MAX_POSITIONS_PER_CATEGORY}/category`);
+  console.log(`  Close filter: skip markets <${MIN_HOURS_TO_CLOSE}h to resolution`);
   console.log(`  Depth screen: min ${MIN_NO_DEPTH_SHARES} NO shares`);
   console.log(`  Exit: ${noExit ? "OFF" : `${EXIT_PROFIT_PCT * 100}% profit after ${EXIT_MAX_HOLD_HOURS}h`}`);
   console.log(`  Kelly: quarter (${(KELLY_FRACTION * 100).toFixed(0)}%)`);
@@ -428,6 +431,15 @@ async function main() {
       if (catOpen >= MAX_POSITIONS_PER_CATEGORY) {
         console.log(`  SKIP [${cat} cap ${catOpen}/${MAX_POSITIONS_PER_CATEGORY}]: ${market.question.slice(0, 55)}`);
         continue;
+      }
+
+      // ── Time-to-close filter (v5) ──────────────────────
+      if (market.end_date) {
+        const hoursToClose = (new Date(market.end_date).getTime() - Date.now()) / (1000 * 3600);
+        if (hoursToClose < MIN_HOURS_TO_CLOSE) {
+          console.log(`  SKIP [closing <${MIN_HOURS_TO_CLOSE}h]: ${market.question.slice(0, 55)}`);
+          continue;
+        }
       }
 
       // ── #7: Loss analyzer entry signal ─────────────────
