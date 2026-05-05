@@ -45,7 +45,7 @@ const MIN_NO_DEPTH_SHARES = 50;
 // ── #1: Exit strategy ──────────────────────────────────────
 const EXIT_PROFIT_PCT = 0.50;
 const EXIT_MAX_HOLD_HOURS = 6;
-const EXIT_CHECK_ENABLED = true;
+const EXIT_CHECK_ENABLED = false; // v5: disabled - profit-lock is negative EV, hold to resolution
 
 // ── #4: Kelly position sizing ──────────────────────────────
 const FLIP_RATES_PATH = path.join(__dirname, "..", "backtesting", "category_flip_rates.json");
@@ -284,7 +284,7 @@ async function main() {
   const loop = args.includes("--loop");
   const interval = parseInt(args.find(a => a.startsWith("--interval="))?.split("=")[1] || "300") * 1000;
   const positionSize = parseFloat(args.find(a => a.startsWith("--position-size="))?.split("=")[1] || `${DEFAULT_POSITION_SIZE}`);
-  const noExit = args.includes("--no-exit");
+  const noExit = !EXIT_CHECK_ENABLED;
 
   loadFlipRates();
 
