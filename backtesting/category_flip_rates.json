@@ -1,0 +1,99 @@
+{
+  "generated": "2026-05-05T04:17:33.097980Z",
+  "position_size": 1,
+  "min_yes": 0.95,
+  "total_positions": 256744,
+  "total_win_rate": 0.1465,
+  "categories": {
+    "crypto": {
+      "positions": 73491,
+      "wins": 10941,
+      "win_rate": 0.1489,
+      "avg_no_cost": 0.0406,
+      "ev_per_dollar": 0.1054,
+      "breakeven_wr": 0.0414,
+      "full_kelly": 0.1128,
+      "quarter_kelly": 0.0282
+    },
+    "entertainment": {
+      "positions": 1453,
+      "wins": 258,
+      "win_rate": 0.1776,
+      "avg_no_cost": 0.032,
+      "ev_per_dollar": 0.1421,
+      "breakeven_wr": 0.0327,
+      "full_kelly": 0.1503,
+      "quarter_kelly": 0.0376
+    },
+    "finance": {
+      "positions": 3497,
+      "wins": 355,
+      "win_rate": 0.1015,
+      "avg_no_cost": 0.0242,
+      "ev_per_dollar": 0.0753,
+      "breakeven_wr": 0.0247,
+      "full_kelly": 0.0792,
+      "quarter_kelly": 0.0198
+    },
+    "other": {
+      "positions": 120619,
+      "wins": 19156,
+      "win_rate": 0.1588,
+      "avg_no_cost": 0.0266,
+      "ev_per_dollar": 0.1291,
+      "breakeven_wr": 0.0272,
+      "full_kelly": 0.1358,
+      "quarter_kelly": 0.034
+    },
+    "politics": {
+      "positions": 9300,
+      "wins": 1694,
+      "win_rate": 0.1822,
+      "avg_no_cost": 0.0285,
+      "ev_per_dollar": 0.1501,
+      "breakeven_wr": 0.0291,
+      "full_kelly": 0.1581,
+      "quarter_kelly": 0.0395
+    },
+    "sports": {
+      "positions": 40902,
+      "wins": 3999,
+      "win_rate": 0.0978,
+      "avg_no_cost": 0.018,
+      "ev_per_dollar": 0.0778,
+      "breakeven_wr": 0.0184,
+      "full_kelly": 0.0812,
+      "quarter_kelly": 0.0203
+    },
+    "tech": {
+      "positions": 3427,
+      "wins": 525,
+      "win_rate": 0.1532,
+      "avg_no_cost": 0.0297,
+      "ev_per_dollar": 0.1205,
+      "breakeven_wr": 0.0303,
+      "full_kelly": 0.1273,
+      "quarter_kelly": 0.0318
+    },
+    "weather": {
+      "positions": 4055,
+      "wins": 694,
+      "win_rate": 0.1711,
+      "avg_no_cost": 0.026,
+      "ev_per_dollar": 0.1418,
+      "breakeven_wr": 0.0265,
+      "full_kelly": 0.149,
+      "quarter_kelly": 0.0373
+    }
+  },
+  "all": {
+    "positions": 256744,
+    "wins": 37622,
+    "win_rate": 0.1465,
+    "avg_no_cost": 0.0294,
+    "ev_per_dollar": 0.1143,
+    "breakeven_wr": 0.0299,
+    "full_kelly": 0.1207,
+    "quarter_kelly": 0.0302
+  }
+}
