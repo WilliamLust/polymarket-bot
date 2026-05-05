@@ -313,6 +313,7 @@ async function main() {
   const loop = args.includes("--loop");
   const interval = parseInt(args.find(a => a.startsWith("--interval="))?.split("=")[1] || "300") * 1000;
   const positionSize = parseFloat(args.find(a => a.startsWith("--position-size="))?.split("=")[1] || `${DEFAULT_POSITION_SIZE}`);
+  const weatherUrgent = args.includes("--weather-urgent");
   const noExit = !EXIT_CHECK_ENABLED;
 
   loadFlipRates();
@@ -425,9 +426,14 @@ async function main() {
     }
 
     // ── Entry scan ──────────────────────────────────────
-    const markets = await getHighYesMarkets();
+    let markets = await getHighYesMarkets();
+    if (weatherUrgent) {
+      const before = markets.length;
+      markets = markets.filter(m => m.category === "weather");
+      console.log("WEATHER URGENT SCAN -- filtered " + before + " markets to " + markets.length + " weather markets");
+    }
     if (markets.length === 0) {
-      console.log("No qualifying markets found.");
+      console.log(weatherUrgent ? "WEATHER URGENT SCAN -- No qualifying weather markets found." : "No qualifying markets found.");
       return;
     }
 
@@ -620,7 +626,11 @@ async function main() {
     }
   }
 
-  if (loop) {
+  if (weatherUrgent) {
+    console.log("\n" + "\u2500".repeat(70));
+    console.log("WEATHER URGENT SCAN -- " + new Date().toISOString().slice(11, 19) + " (single pass)");
+    await scanAndTrade();
+  } else if (loop) {
     let scanCount = 0;
     while (true) {
       scanCount++;

@@ -5,11 +5,20 @@
  * probability distribution over temperature buckets, then computes KL-divergence
  * against the market's implied distribution from YES price.
  *
+ * v5 additions:
+ *   - Multi-model convergence gate (ECMWF + GFS via Open-Meteo API)
+ *   - Airport station delta table (seasonal bias correction)
+ *
  * Signal levels:
  *   STRONG  = D_KL >= 0.20 bits  → model strongly disagrees with market
  *   MODERATE = D_KL >= 0.10 bits  → meaningful divergence
  *   WEAK    = D_KL >= 0.05 bits  → slight edge
  *   NONE    = D_KL <  0.05 bits  → market and model agree, no edge
+ *
+ * Convergence gate modifiers:
+ *   Spread > 5°F / 3°C → CAUTION (boost = 0.5x), overrides STRONG/MODERATE
+ *   Spread 3-5°F / 2-3°C → cap boost at 1.0x
+ *   Spread < 3°F / 2°C → normal boost from D_KL
  *
  * Usage:
  *   const { KLWeather } = require("./kl_weather");
@@ -22,7 +31,9 @@ const fs = require("fs");
 const path = require("path");
 
 const NWS_API = "https://api.weather.gov";
+const OPEN_METEO_API = "https://api.open-meteo.com/v1/forecast";
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30-min cache (forecasts update hourly)
+const OPEN_METEO_CACHE_TTL_MS = 15 * 60 * 1000; // 15-min cache (models update every 6h)
 
 // ── Station database: resolution stations for Polymarket weather markets ──
 // Key = lowercase substring to match in market question, value = { station, lat, lon, unit }
@@ -65,6 +76,31 @@ const STATION_DB = {
   "melbourne": { station: "YMML", lat: -37.67, lon: 144.843, unit: "C" },
 };
 
+// ── Airport station delta table (v5) ─────────────────────────
+// Seasonal offset: airport vs city-center. Negative = airport cooler.
+// Values in station native unit (F for US, C for international).
+// Source: polymarketweather.com research
+//   KLGA: 3-5°F cooler than Midtown in summer (sea breeze off Long Island Sound)
+//   LFPB: Le Bourget 1-2°C cooler than central Paris (urban heat island effect)
+//   KLAX: 2°F cooler than downtown LA in summer (coastal marine layer)
+//   KSFO: 2-4°F cooler than SF proper in summer (persistent marine layer / fog)
+//   EGLC: London City minimal delta (~1°C, similar urban environment)
+const STATION_DELTAS = {
+  "KLGA": { winter: -1, spring: -2, summer: -4, fall: -2 },
+  "LFPB": { winter: 0,  spring: -1, summer: -2, fall: -1 },
+  "KLAX": { winter: 0,  spring: 0,  summer: -2, fall: -1 },
+  "KSFO": { winter: 0,  spring: -1, summer: -3, fall: -1 },
+  "EGLC": { winter: 0,  spring: 0,  summer: -1, fall: 0 },
+};
+
+// ── Helper: get season from month (0-indexed) ───────────────
+function getSeason(month) {
+  if (month >= 11 || month <= 1) return "winter";
+  if (month >= 2 && month <= 4) return "spring";
+  if (month >= 5 && month <= 7) return "summer";
+  return "fall";
+}
+
 const NWS_HEADERS = {
   "User-Agent": "PolymarketBot/1.0 (weather-signal; contact: bot@example.com)",
   Accept: "application/ld+json",
@@ -74,8 +110,9 @@ class KLWeather {
   constructor() {
     this.pointsCache = new Map();   // lat,lon → points metadata (persistent)
     this.forecastCache = new Map(); // station → forecast data (TTL-based)
+    this.openMeteoCache = new Map(); // lat,lon → ensemble data (TTL-based)
     this.enabled = true;
-    console.log("[KL-Weather] Initialized — station DB has " + Object.keys(STATION_DB).length + " city mappings");
+    console.log("[KL-Weather] Initialized — station DB has " + Object.keys(STATION_DB).length + " city mappings, " + Object.keys(STATION_DELTAS).length + " delta corrections");
   }
 
   // ── Identify station from market question ──────────────────────
@@ -94,25 +131,28 @@ class KLWeather {
   // or: "Highest temperature in London on May 5: Above 22°C?"
   // Returns { threshold, direction, unit } or null
   _parseBucket(question) {
-    // Pattern: "above N°F" or "over N°F" or "> N°F" or "at least N°F"
-    const fMatch = question.match(/(?:above|over|exceed|at least|>\s*)(\d+)\s*°?\s*F/i);
+    // Strip degree symbols from question so regex doesn't need to match them
+    const q = question.replace(/\u00B0/g, "");
+
+    // Pattern: "above NF" or "above N F" - \s* between keyword and digit
+    const fMatch = q.match(/(?:above|over|exceed|at least|>\s*)\s*(\d+)\s*F/i);
     if (fMatch) return { threshold: parseInt(fMatch[1]), direction: "above", unit: "F" };
 
-    const cMatch = question.match(/(?:above|over|exceed|at least|>\s*)(\d+)\s*°?\s*C/i);
+    const cMatch = q.match(/(?:above|over|exceed|at least|>\s*)\s*(\d+)\s*C/i);
     if (cMatch) return { threshold: parseInt(cMatch[1]), direction: "above", unit: "C" };
 
-    // Pattern: "below N°F" or "under N°F"
-    const fBelow = question.match(/(?:below|under|<\s*)(\d+)\s*°?\s*F/i);
+    // Pattern: "below NF" or "under NF"
+    const fBelow = q.match(/(?:below|under|<\s*)\s*(\d+)\s*F/i);
     if (fBelow) return { threshold: parseInt(fBelow[1]), direction: "below", unit: "F" };
 
-    const cBelow = question.match(/(?:below|under|<\s*)(\d+)\s*C/i);
+    const cBelow = q.match(/(?:below|under|<\s*)\s*(\d+)\s*C/i);
     if (cBelow) return { threshold: parseInt(cBelow[1]), direction: "below", unit: "C" };
 
-    // Pattern: "between X and Y °F" — threshold is midpoint, we'll handle differently
-    const fBetween = question.match(/between\s+(\d+)\s*°?\s*F\s+and\s+(\d+)\s*°?\s*F/i);
+    // Pattern: "between X and Y F"
+    const fBetween = q.match(/between\s+(\d+)\s*F\s+and\s+(\d+)\s*F/i);
     if (fBetween) return { threshold: parseInt(fBetween[1]), direction: "above", unit: "F", upper: parseInt(fBetween[2]) };
 
-    const cBetween = question.match(/between\s+(\d+)\s*°?\s*C\s+and\s+(\d+)\s*°?\s*C/i);
+    const cBetween = q.match(/between\s+(\d+)\s*C\s+and\s+(\d+)\s*C/i);
     if (cBetween) return { threshold: parseInt(cBetween[1]), direction: "above", unit: "C", upper: parseInt(cBetween[2]) };
 
     return null;
@@ -208,6 +248,146 @@ class KLWeather {
     }
   }
 
+  // ── Fetch Open-Meteo ensemble data (v5) ──────────────────
+  // Returns ECMWF and GFS daily max temps for the target date
+  async _fetchOpenMeteo(lat, lon, targetDate, unit) {
+    const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+    const cached = this.openMeteoCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < OPEN_METEO_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    try {
+      const targetDay = targetDate.toISOString().slice(0, 10);
+      const resp = await axios.get(OPEN_METEO_API, {
+        params: {
+          latitude: lat,
+          longitude: lon,
+          daily: "temperature_2m_max",
+          models: "ecmwf_ifs,gfs_seamless",
+          forecast_days: 3,
+          timezone: "auto",
+        },
+        timeout: 10000,
+      });
+
+      const daily = resp.data?.daily;
+      if (!daily || !daily.time) return null;
+
+      // Find target date index
+      const dayIndex = daily.time.indexOf(targetDay);
+      if (dayIndex === -1) {
+        // Try tomorrow if today not in forecast (Open-Meteo sometimes starts from tomorrow)
+        const tomorrow = new Date(targetDate);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+        const altIndex = daily.time.indexOf(tomorrowStr);
+        if (altIndex === -1) return null;
+        // Use the altIndex but log it
+        return this._extractEnsemble(daily, altIndex, unit);
+      }
+
+      const result = this._extractEnsemble(daily, dayIndex, unit);
+      this.openMeteoCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
+    } catch (e) {
+      console.log(`[KL-Weather] Open-Meteo fetch error: ${e.message?.slice(0, 60)}`);
+      return null;
+    }
+  }
+
+  // ── Extract ensemble values from Open-Meteo daily response ──
+  _extractEnsemble(daily, dayIndex, unit) {
+    // Open-Meteo returns Celsius. Model-specific keys:
+    //   ecmwf_ifs_temperature_2m_max, gfs_temperature_2m_max
+    const ecmwfMaxC = daily.temperature_2m_max_ecmwf_ifs?.[dayIndex];
+    const gfsMaxC = daily.temperature_2m_max_gfs_seamless?.[dayIndex];
+
+    if (ecmwfMaxC === null || ecmwfMaxC === undefined ||
+        gfsMaxC === null || gfsMaxC === undefined) {
+      return null;
+    }
+
+    // Convert to station's native unit
+    let ecmwfMax = ecmwfMaxC;
+    let gfsMax = gfsMaxC;
+    if (unit === "F") {
+      ecmwfMax = ecmwfMaxC * 9 / 5 + 32;
+      gfsMax = gfsMaxC * 9 / 5 + 32;
+    }
+
+    return {
+      ecmwfMax: Math.round(ecmwfMax * 10) / 10,
+      gfsMax: Math.round(gfsMax * 10) / 10,
+      spread: Math.round(Math.abs(ecmwfMax - gfsMax) * 10) / 10,
+      unit,
+    };
+  }
+
+  // ── Apply airport station delta correction (v5) ──────────
+  // Shifts temperature distribution by the seasonal bias at the airport
+  _applyStationDelta(temps, stationInfo) {
+    const deltas = STATION_DELTAS[stationInfo.station];
+    if (!deltas) return temps; // No correction for this station
+
+    const season = getSeason(new Date().getMonth());
+    const delta = deltas[season];
+
+    if (!delta || delta === 0) return temps;
+
+    // Apply delta to shift the entire temperature distribution
+    return {
+      ...temps,
+      high: temps.high + delta,
+      low: temps.low + delta,
+      mean: temps.mean + delta,
+      hourlyTemps: temps.hourlyTemps.map(t => t + delta),
+      deltaApplied: delta,
+      deltaSeason: season,
+    };
+  }
+
+  // ── Convergence gate logic (v5) ──────────────────────────
+  // Modifies signal level/boost based on ECMWF vs GFS model spread
+  _convergenceGate(ensemble, currentLevel, currentBoost) {
+    if (!ensemble) {
+      return { level: currentLevel, boost: currentBoost, gateReason: "no ensemble data" };
+    }
+
+    const spread = ensemble.spread;
+    const isF = ensemble.unit === "F";
+
+    // Thresholds: F uses 3/5, C uses 2/3
+    const cautionThreshold = isF ? 5 : 3;
+    const reduceThreshold = isF ? 3 : 2;
+
+    if (spread > cautionThreshold) {
+      // Major model disagreement → override to CAUTION
+      return {
+        level: "CAUTION",
+        boost: 0.5,
+        gateReason: "spread=" + spread.toFixed(1) + "\u00B0" + ensemble.unit + " > " + cautionThreshold + "\u00B0" + ensemble.unit + ", models disagree",
+      };
+    }
+
+    if (spread > reduceThreshold) {
+      // Moderate disagreement → cap boost at 1.0x
+      const cappedBoost = Math.min(currentBoost, 1.0);
+      return {
+        level: currentLevel,
+        boost: cappedBoost,
+        gateReason: "spread=" + spread.toFixed(1) + "\u00B0" + ensemble.unit + " (" + reduceThreshold + "-" + cautionThreshold + "), boost capped at 1.0x",
+      };
+    }
+
+    // Good agreement → normal boost from D_KL
+    return {
+      level: currentLevel,
+      boost: currentBoost,
+      gateReason: "spread=" + spread.toFixed(1) + "\u00B0" + ensemble.unit + " < " + reduceThreshold + "\u00B0" + ensemble.unit + ", models agree",
+    };
+  }
+
   // ── Extract forecast high/low for target date ─────────────────
   _extractForecastTemps(periods, targetDate, unit) {
     const targetDay = targetDate.toISOString().slice(0, 10);
@@ -249,14 +429,12 @@ class KLWeather {
   // ── Build probability distribution from forecast ──────────────
   // Returns P(temp >= threshold) using a normal approximation
   _forecastProbability(temps, bucket) {
-    if (!temps || temps.sampleSize < 4) return null;
+    if (!temps || temps.sampleSize < 1) return null;
 
     const { mean, stdDev } = temps;
     const threshold = bucket.threshold;
 
     // Use high temperature distribution for "above" questions
-    // The forecast high is the peak, spread by stdDev
-    // For "above X", we want P(high >= X)
     // Model the high as Normal(mean, sigma) where sigma captures forecast uncertainty
     const sigma = Math.max(stdDev, 2.0); // Minimum 2° uncertainty
 
@@ -337,32 +515,52 @@ class KLWeather {
     // Step 3: Parse date
     const targetDate = this._parseDate(question);
 
-    // Step 4: Fetch forecast
+    // Step 4: Try NWS forecast first, then fall back to Open-Meteo
+    let temps = null;
+    let forecastSource = "NWS";
     const forecast = await this._fetchForecast(station.lat, station.lon);
-    if (!forecast) {
-      return { level: "UNKNOWN", dkl: 0, boost: 1.0, reason: `no NWS data for ${station.station}` };
+    if (forecast) {
+      temps = this._extractForecastTemps(forecast.periods, targetDate, station.unit);
     }
 
-    // Step 5: Extract temperature distribution
-    const temps = this._extractForecastTemps(forecast.periods, targetDate, station.unit);
+    // Step 4b: If NWS failed, use Open-Meteo ECMWF as fallback
     if (!temps) {
-      return { level: "UNKNOWN", dkl: 0, boost: 1.0, reason: "no forecast data for target date" };
+      forecastSource = "Open-Meteo";
+      const ensemble = await this._fetchOpenMeteo(station.lat, station.lon, targetDate, station.unit);
+      if (ensemble && ensemble.ecmwfMax !== null) {
+        // Build a simple temperature distribution from ECMWF max
+        // Assume std dev of 3 degrees (conservative uncertainty)
+        const ecmwfHigh = ensemble.ecmwfMax;
+        temps = {
+          high: ecmwfHigh,
+          low: ecmwfHigh - 8,  // rough estimate
+          mean: ecmwfHigh - 2,  // daily mean is lower than max
+          stdDev: 3.0,
+          hourlyTemps: [],  // not available from Open-Meteo daily
+          sampleSize: 1,
+          fromEnsemble: true,
+        };
+      }
     }
 
-    // Step 6: Compute model probability
-    const pModel = this._forecastProbability(temps, bucket);
+    if (!temps) {
+      return { level: "UNKNOWN", dkl: 0, boost: 1.0, reason: "no forecast data for " + station.station + " (NWS and Open-Meteo both failed)" };
+    }
+
+    // Step 5 (v5): Apply airport station delta correction
+    const deltaTemps = this._applyStationDelta(temps, station);
+
+    // Step 6: Compute model probability (using delta-adjusted temps)
+    const pModel = this._forecastProbability(deltaTemps, bucket);
     if (pModel === null) {
       return { level: "UNKNOWN", dkl: 0, boost: 1.0, reason: "insufficient forecast samples" };
     }
 
     // Step 7: Compute KL-divergence vs market
-    const pMarket = market.yes_price; // Market's implied P(YES)
+    const pMarket = market.yes_price;
     const dkl = this._klDivergence(pModel, pMarket);
 
-    // Step 8: Signal classification
-    // We also need to know the *direction* of disagreement
-    // If model says YES is more likely than market → model agrees with market (bad for BUY_NO)
-    // If model says YES is less likely than market → model supports BUY_NO
+    // Step 8: Signal classification (from D_KL)
     const modelSaysNo = pModel < pMarket;
     const edgeDirection = modelSaysNo ? "model-supports-NO" : "model-supports-YES";
 
@@ -370,24 +568,39 @@ class KLWeather {
     if (dkl >= 0.20 && modelSaysNo) {
       level = "STRONG";
       boost = 1.5;
-      reason = `D_KL=${dkl.toFixed(3)} bits, model P(YES)=${(pModel * 100).toFixed(1)}% vs market ${(pMarket * 100).toFixed(1)}%, ${edgeDirection}, ${station.station} high=${temps.high.toFixed(1)}°`;
+      reason = "D_KL=" + dkl.toFixed(3) + " bits, model P(YES)=" + (pModel * 100).toFixed(1) + "% vs market " + (pMarket * 100).toFixed(1) + "%, " + edgeDirection + ", " + station.station + " high=" + deltaTemps.high.toFixed(1) + "\u00B0 via " + forecastSource;
     } else if (dkl >= 0.10 && modelSaysNo) {
       level = "MODERATE";
       boost = 1.2;
-      reason = `D_KL=${dkl.toFixed(3)} bits, model P(YES)=${(pModel * 100).toFixed(1)}% vs market ${(pMarket * 100).toFixed(1)}%, ${edgeDirection}, ${station.station} high=${temps.high.toFixed(1)}°`;
+      reason = "D_KL=" + dkl.toFixed(3) + " bits, model P(YES)=" + (pModel * 100).toFixed(1) + "% vs market " + (pMarket * 100).toFixed(1) + "%, " + edgeDirection + ", " + station.station + " high=" + deltaTemps.high.toFixed(1) + "\u00B0 via " + forecastSource;
     } else if (dkl >= 0.05 && modelSaysNo) {
       level = "WEAK";
       boost = 1.0;
-      reason = `D_KL=${dkl.toFixed(3)} bits, model P(YES)=${(pModel * 100).toFixed(1)}% vs market ${(pMarket * 100).toFixed(1)}%, ${edgeDirection}`;
+      reason = "D_KL=" + dkl.toFixed(3) + " bits, model P(YES)=" + (pModel * 100).toFixed(1) + "% vs market " + (pMarket * 100).toFixed(1) + "%, " + edgeDirection;
     } else if (!modelSaysNo && dkl >= 0.10) {
-      // Model DISAGREES with our BUY_NO thesis — reduce size
       level = "CAUTION";
       boost = 0.5;
-      reason = `D_KL=${dkl.toFixed(3)} bits, model says YES more likely (P(YES)=${(pModel * 100).toFixed(1)}% vs ${(pMarket * 100).toFixed(1)}%), ${station.station}`;
+      reason = "D_KL=" + dkl.toFixed(3) + " bits, model says YES more likely (P(YES)=" + (pModel * 100).toFixed(1) + "% vs " + (pMarket * 100).toFixed(1) + "%), " + station.station;
     } else {
       level = "NONE";
       boost = 1.0;
-      reason = `D_KL=${dkl.toFixed(3)} bits, model and market agree, ${station.station} high=${temps.high.toFixed(1)}°`;
+      reason = "D_KL=" + dkl.toFixed(3) + " bits, model and market agree, " + station.station + " high=" + deltaTemps.high.toFixed(1) + "\u00B0 via " + forecastSource;
+    }
+
+    // Step 9 (v5): Multi-model convergence gate
+    const ensemble = await this._fetchOpenMeteo(station.lat, station.lon, targetDate, station.unit);
+    const gated = this._convergenceGate(ensemble, level, boost);
+    level = gated.level;
+    boost = gated.boost;
+
+    // Append convergence gate info to reason
+    if (gated.gateReason) {
+      reason = reason + " | " + gated.gateReason;
+    }
+
+    // Append delta info to reason
+    if (deltaTemps.deltaApplied && deltaTemps.deltaApplied !== 0) {
+      reason = reason + " | delta=" + deltaTemps.deltaApplied + "\u00B0" + station.unit + " (" + deltaTemps.deltaSeason + ")";
     }
 
     return {
@@ -398,8 +611,15 @@ class KLWeather {
       boost,
       reason,
       station: station.station,
-      forecastHigh: temps.high,
-      forecastLow: temps.low,
+      forecastHigh: deltaTemps.high,
+      forecastLow: deltaTemps.low,
+      rawForecastHigh: temps.high,
+      forecastSource,
+      deltaApplied: deltaTemps.deltaApplied || 0,
+      deltaSeason: deltaTemps.deltaSeason || null,
+      convergenceSpread: ensemble ? ensemble.spread : null,
+      convergenceECMWF: ensemble ? ensemble.ecmwfMax : null,
+      convergenceGFS: ensemble ? ensemble.gfsMax : null,
       sampleSize: temps.sampleSize,
     };
   }
@@ -407,6 +627,7 @@ class KLWeather {
   // ── Clear forecast cache ──────────────────────────────────────
   clearCache() {
     this.forecastCache.clear();
+    this.openMeteoCache.clear();
   }
 }
 
