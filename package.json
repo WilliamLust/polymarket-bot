@@ -1,0 +1,31 @@
+{
+  "name": "polymarket-bot",
+  "version": "1.0.0",
+  "description": "ML-driven trading bot for Polymarket prediction markets. Backtesting-first development — no capital at risk until edge is proven.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WilliamLust/polymarket-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/WilliamLust/polymarket-bot/issues"
+  },
+  "homepage": "https://github.com/WilliamLust/polymarket-bot#readme",
+  "dependencies": {
+    "@polymarket/builder-relayer-client": "^0.0.9",
+    "@polymarket/builder-signing-sdk": "^1.0.0",
+    "@polymarket/clob-client-v2": "^1.0.3",
+    "axios": "^1.16.0",
+    "dotenv": "^17.4.2",
+    "viem": "^2.48.8"
+  }
+}

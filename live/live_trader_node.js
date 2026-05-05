@@ -56,6 +56,33 @@ const WEATHER_REGIONS = {
 };
 const MAX_PER_WEATHER_REGION = 2;
 
+
+
+// ── Order retry wrapper (handles order_version_mismatch) ───
+async function placeOrderWithRetry(clobClient, orderParams, options, maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      // Force refresh cached version before first attempt
+      if (attempt > 0) {
+        await clobClient.resolveVersion(true);
+      }
+      const order = await clobClient.createAndPostOrder(orderParams, options);
+      return order;
+    } catch (e) {
+      const errMsg = e.response?.data || e.message || String(e);
+      const isVersionMismatch = typeof errMsg === 'string' && errMsg.includes('order_version_mismatch');
+      if (isVersionMismatch && attempt < maxRetries) {
+        console.log(`  Order version mismatch, retrying (${attempt + 1}/${maxRetries})...`);
+        // Force version refresh
+        clobClient.cachedVersion = undefined;
+        await new Promise(r => setTimeout(r, 500));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
 function getWeatherRegion(question) {
   const q = question.toLowerCase();
   // Try longer keys first
@@ -277,7 +304,7 @@ async function checkExits(clobClient, positions) {
         const tickSize = await clobClient.getTickSize(pos.no_token_id);
         const negRisk = await clobClient.getNegRisk(pos.no_token_id);
 
-        const order = await clobClient.createAndPostOrder({
+        const order = await placeOrderWithRetry(clobClient, {
           tokenID: pos.no_token_id,
           price: currentNoBid,
           size: shares,
@@ -302,6 +329,50 @@ async function checkExits(clobClient, positions) {
 
   if (exitsChecked > 0) {
     console.log(`Exit scan: ${exitsChecked} checked, ${exitsExecuted} executed`);
+  }
+  return positions;
+}
+
+
+
+// ── #1b: Resolution checker — detect resolved positions ──────
+async function checkResolutions(positions) {
+  const openPositions = positions.filter(p => p.status === "open");
+  if (openPositions.length === 0) return positions;
+
+  let resolved = 0;
+  for (const pos of openPositions) {
+    try {
+      const resp = await axios.get(`${GAMMA_API}/markets/${pos.id}`, { timeout: 8000 });
+      const m = resp.data;
+      if (!m.closed) continue;
+
+      // Market is closed — determine outcome
+      // For BUY_NO: we win if the market resolves NO (yes_price rounds to 0)
+      const yesPrice = parseFloat(m.outcomePrices?.[0] ?? m.yes_price ?? "0.5");
+      const noWin = yesPrice < 0.5; // NO side wins
+      const entryCost = pos.entry_cost || (pos.no_price_at_entry * pos.position_size);
+
+      if (noWin) {
+        // Our NO position won — payout is position_size
+        pos.status = "resolved";
+        pos.resolution = "WIN";
+        pos.pnl = pos.position_size - entryCost;
+      } else {
+        // YES won — we lose our entry cost
+        pos.status = "resolved";
+        pos.resolution = "LOSS";
+        pos.pnl = -entryCost;
+      }
+      pos.resolved_time = new Date().toISOString();
+      resolved++;
+      console.log(`  RESOLVED [${pos.resolution}] ${pos.question?.slice(0, 50)}... PnL=$${pos.pnl?.toFixed(3)}`);
+    } catch (e) {
+      // Skip on API error — will retry next scan
+    }
+  }
+  if (resolved > 0) {
+    console.log(`Resolution scan: ${resolved} positions resolved`);
   }
   return positions;
 }
@@ -418,6 +489,10 @@ async function main() {
 
     // ── #7: Analyze resolved positions for learning ─────
     lossAnalyzer.analyzeResolved(positions);
+
+    // ── #1b: Check if any open positions have resolved ──
+    positions = await checkResolutions(positions);
+    saveData("positions.json", positions);
 
     // ── #1: Check exits first ────────────────────────────
     if (!noExit && !dryRun) {
@@ -587,7 +662,7 @@ async function main() {
         const tickSize = await clobClient.getTickSize(market.no_token_id);
         const negRisk = await clobClient.getNegRisk(market.no_token_id);
 
-        const order = await clobClient.createAndPostOrder({
+        const order = await placeOrderWithRetry(clobClient, {
           tokenID: market.no_token_id,
           price: noPrice,
           size: adjustedShares,
