@@ -10,6 +10,7 @@
  *   - Per-category flip rates (from backtest)
  *   - Exit strategy (close positions on price movement)
  *   - Kelly position sizing (vary by category edge)
+ *   - Whale watching signal (smart-money NO-buyer confirmation)
  */
 
 const { ClobClient } = require("@polymarket/clob-client-v2");
@@ -45,6 +46,9 @@ const EXIT_CHECK_ENABLED = true;
 // ── #4: Kelly position sizing ──────────────────────────────
 const FLIP_RATES_PATH = path.join(__dirname, "..", "backtesting", "category_flip_rates.json");
 const KELLY_FRACTION = 0.25;
+
+// ── #5: Whale watching signal ─────────────────────────────
+const { WhaleChecker } = require("./whale_checker");
 
 // ── Load env ───────────────────────────────────────────────
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
@@ -274,6 +278,7 @@ async function main() {
 
   loadFlipRates();
 
+  const whaleChecker = new WhaleChecker();
   const account = privateKeyToAccount(PK.startsWith("0x") ? PK : `0x${PK}`);
   const walletClient = createWalletClient({ account, chain: polygon, transport: http() });
   console.log(`Owner (EOA) address: ${account.address}`);
@@ -351,6 +356,7 @@ async function main() {
   console.log(`  Depth screen: min ${MIN_NO_DEPTH_SHARES} NO shares`);
   console.log(`  Exit: ${noExit ? "OFF" : `${EXIT_PROFIT_PCT * 100}% profit after ${EXIT_MAX_HOLD_HOURS}h`}`);
   console.log(`  Kelly: quarter (${(KELLY_FRACTION * 100).toFixed(0)}%)`);
+  console.log(`  Whale signal: ${whaleChecker.enabled ? `${whaleChecker.smartWallets.size} smart wallets loaded` : "DISABLED"}`);
   console.log(`  Deposit wallet: ${depositWallet}`);
 
   function todayKey() {
@@ -359,6 +365,9 @@ async function main() {
 
   async function scanAndTrade() {
     let positions = loadData("positions.json");
+
+    // Clear whale trade cache at start of each scan cycle
+    whaleChecker.clearCache();
 
     // ── #1: Check exits first ────────────────────────────
     if (!noExit && !dryRun) {
@@ -430,18 +439,35 @@ async function main() {
         console.log(`    Depth: best NO ask=${depth.bestAsk.toFixed(3)} vs theoretical=${noPrice.toFixed(3)} (${depth.totalDepth.toFixed(0)} shares)`);
       }
 
+      // ── #5: Whale watching signal ──────────────────────
+      let whaleSignal = { level: "UNKNOWN", count: 0, wallets: [], boost: 1.0, reason: "skipped" };
+      if (whaleChecker.enabled) {
+        whaleSignal = await whaleChecker.checkMarket(market.condition_id || market.id);
+        const emoji = whaleSignal.level === "STRONG" ? "◆" : whaleSignal.level === "MODERATE" ? "◇" : "○";
+        console.log(`    Whale: ${emoji} ${whaleSignal.level} (${whaleSignal.count} wallets, ${whaleSignal.reason})`);
+      }
+
+      // Adjust position size by whale boost
+      let adjustedSize = catPositionSize;
+      if (whaleSignal.boost !== 1.0) {
+        adjustedSize = Math.round(catPositionSize * whaleSignal.boost * 100) / 100;
+        adjustedSize = Math.max(0.5, Math.min(adjustedSize, 10)); // clamp to [0.5, 10]
+      }
+
       if (dryRun) {
-        console.log(`  [DRY RUN] BUY NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${catPositionSize} (${shares} shares) | ${market.question.slice(0, 65)}`);
+        console.log(`  [DRY RUN] BUY NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${adjustedSize} (${shares} shares) ${whaleSignal.level !== "UNKNOWN" ? `whale=${whaleSignal.level}` : ""} | ${market.question.slice(0, 65)}`);
         positions.push({
           id: market.id,
           question: market.question,
           entry_time: new Date().toISOString(),
           yes_price_at_entry: market.yes_price,
           no_price_at_entry: noPrice,
-          position_size: catPositionSize,
+          position_size: adjustedSize,
           no_token_id: market.no_token_id,
           category: cat,
           status: "dry_run",
+          whale_signal: whaleSignal.level,
+          whale_count: whaleSignal.count,
         });
         catCounts[cat] = (catCounts[cat] || 0) + 1;
         saveData("positions.json", positions);
@@ -449,7 +475,8 @@ async function main() {
       }
 
       try {
-        console.log(`  BUYING NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${catPositionSize} (${shares} shares) | ${market.question.slice(0, 65)}`);
+        const adjustedShares = Math.round(adjustedSize / noPrice);
+        console.log(`  BUYING NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${adjustedSize} (${adjustedShares} shares) ${whaleSignal.level !== "UNKNOWN" ? `whale=${whaleSignal.level}` : ""} | ${market.question.slice(0, 65)}`);
 
         const tickSize = await clobClient.getTickSize(market.no_token_id);
         const negRisk = await clobClient.getNegRisk(market.no_token_id);
@@ -457,7 +484,7 @@ async function main() {
         const order = await clobClient.createAndPostOrder({
           tokenID: market.no_token_id,
           price: noPrice,
-          size: shares,
+          size: adjustedShares,
           side: "BUY",
         }, {
           tickSize,
@@ -472,11 +499,13 @@ async function main() {
           entry_time: new Date().toISOString(),
           yes_price_at_entry: market.yes_price,
           no_price_at_entry: noPrice,
-          position_size: catPositionSize,
+          position_size: adjustedSize,
           no_token_id: market.no_token_id,
           category: cat,
           status: "open",
           order_id: order.orderID || order.id || "",
+          whale_signal: whaleSignal.level,
+          whale_count: whaleSignal.count,
         });
         catCounts[cat] = (catCounts[cat] || 0) + 1;
         saveData("positions.json", positions);

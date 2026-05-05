@@ -1,0 +1,233 @@
+{
+  "generated": "2026-05-05T04:57:08.323706Z",
+  "hypothesis": "Markets with smart-money NO buyers flip at higher rate than markets without",
+  "baseline_wr": 0.146,
+  "min_wallet_trades": 20,
+  "total_no_buy_trades": 33478711,
+  "unique_no_buyer_wallets": 788007,
+  "wallets_with_min_trades": 115724,
+  "tier_results": {
+    "top_1pct_wr": {
+      "smart_wallets_count": 1157,
+      "smart_present": {
+        "label": "top_1pct_wr_present",
+        "positions": 17699,
+        "wins": 11248,
+        "win_rate": 0.6355,
+        "avg_no_cost": 0.0435,
+        "ev_per_dollar": 0.5799,
+        "full_kelly": 0.619,
+        "quarter_kelly": 0.1547
+      },
+      "smart_absent": {
+        "label": "top_1pct_wr_absent",
+        "positions": 239045,
+        "wins": 26374,
+        "win_rate": 0.1103,
+        "avg_no_cost": 0.0319,
+        "ev_per_dollar": 0.0763,
+        "full_kelly": 0.0811,
+        "quarter_kelly": 0.0203
+      },
+      "all": {
+        "label": "top_1pct_wr_all",
+        "positions": 256744,
+        "wins": 37622,
+        "win_rate": 0.1465,
+        "avg_no_cost": 0.0327,
+        "ev_per_dollar": 0.111,
+        "full_kelly": 0.1177,
+        "quarter_kelly": 0.0294
+      },
+      "wr_delta": 0.5252,
+      "chi2": 36343.45,
+      "p_value": 0.0,
+      "significant": true
+    },
+    "top_5pct_wr": {
+      "smart_wallets_count": 5786,
+      "smart_present": {
+        "label": "top_5pct_wr_present",
+        "positions": 73961,
+        "wins": 16810,
+        "win_rate": 0.2273,
+        "avg_no_cost": 0.0419,
+        "ev_per_dollar": 0.181,
+        "full_kelly": 0.1935,
+        "quarter_kelly": 0.0484
+      },
+      "smart_absent": {
+        "label": "top_5pct_wr_absent",
+        "positions": 182783,
+        "wins": 20812,
+        "win_rate": 0.1139,
+        "avg_no_cost": 0.0289,
+        "ev_per_dollar": 0.0827,
+        "full_kelly": 0.0875,
+        "quarter_kelly": 0.0219
+      },
+      "all": {
+        "label": "top_5pct_wr_all",
+        "positions": 256744,
+        "wins": 37622,
+        "win_rate": 0.1465,
+        "avg_no_cost": 0.0327,
+        "ev_per_dollar": 0.111,
+        "full_kelly": 0.1177,
+        "quarter_kelly": 0.0294
+      },
+      "wr_delta": 0.1134,
+      "chi2": 5416.16,
+      "p_value": 0.0,
+      "significant": true
+    },
+    "top_10pct_wr": {
+      "smart_wallets_count": 11572,
+      "smart_present": {
+        "label": "top_10pct_wr_present",
+        "positions": 120604,
+        "wins": 21719,
+        "win_rate": 0.1801,
+        "avg_no_cost": 0.0398,
+        "ev_per_dollar": 0.1368,
+        "full_kelly": 0.1461,
+        "quarter_kelly": 0.0365
+      },
+      "smart_absent": {
+        "label": "top_10pct_wr_absent",
+        "positions": 136140,
+        "wins": 15903,
+        "win_rate": 0.1168,
+        "avg_no_cost": 0.0263,
+        "ev_per_dollar": 0.0882,
+        "full_kelly": 0.093,
+        "quarter_kelly": 0.0232
+      },
+      "all": {
+        "label": "top_10pct_wr_all",
+        "positions": 256744,
+        "wins": 37622,
+        "win_rate": 0.1465,
+        "avg_no_cost": 0.0327,
+        "ev_per_dollar": 0.111,
+        "full_kelly": 0.1177,
+        "quarter_kelly": 0.0294
+      },
+      "wr_delta": 0.0633,
+      "chi2": 2047.1,
+      "p_value": 0.0,
+      "significant": true
+    },
+    "sig_005": {
+      "smart_wallets_count": 6009,
+      "smart_present": {
+        "label": "sig_005_present",
+        "positions": 98133,
+        "wins": 18789,
+        "win_rate": 0.1915,
+        "avg_no_cost": 0.0406,
+        "ev_per_dollar": 0.1472,
+        "full_kelly": 0.1572,
+        "quarter_kelly": 0.0393
+      },
+      "smart_absent": {
+        "label": "sig_005_absent",
+        "positions": 158611,
+        "wins": 18833,
+        "win_rate": 0.1187,
+        "avg_no_cost": 0.0277,
+        "ev_per_dollar": 0.0887,
+        "full_kelly": 0.0936,
+        "quarter_kelly": 0.0234
+      },
+      "all": {
+        "label": "sig_005_all",
+        "positions": 256744,
+        "wins": 37622,
+        "win_rate": 0.1465,
+        "avg_no_cost": 0.0327,
+        "ev_per_dollar": 0.111,
+        "full_kelly": 0.1177,
+        "quarter_kelly": 0.0294
+      },
+      "wr_delta": 0.0728,
+      "chi2": 2564.01,
+      "p_value": 0.0,
+      "significant": true
+    },
+    "sig_001": {
+      "smart_wallets_count": 5263,
+      "smart_present": {
+        "label": "sig_001_present",
+        "positions": 96024,
+        "wins": 18468,
+        "win_rate": 0.1923,
+        "avg_no_cost": 0.0407,
+        "ev_per_dollar": 0.148,
+        "full_kelly": 0.1581,
+        "quarter_kelly": 0.0395
+      },
+      "smart_absent": {
+        "label": "sig_001_absent",
+        "positions": 160720,
+        "wins": 19154,
+        "win_rate": 0.1192,
+        "avg_no_cost": 0.0279,
+        "ev_per_dollar": 0.089,
+        "full_kelly": 0.0939,
+        "quarter_kelly": 0.0235
+      },
+      "all": {
+        "label": "sig_001_all",
+        "positions": 256744,
+        "wins": 37622,
+        "win_rate": 0.1465,
+        "avg_no_cost": 0.0327,
+        "ev_per_dollar": 0.111,
+        "full_kelly": 0.1177,
+        "quarter_kelly": 0.0294
+      },
+      "wr_delta": 0.0731,
+      "chi2": 2571.93,
+      "p_value": 0.0,
+      "significant": true
+    },
+    "high_volume_50": {
+      "smart_wallets_count": 50,
+      "smart_present": {
+        "label": "high_volume_50_present",
+        "positions": 320,
+        "wins": 288,
+        "win_rate": 0.9,
+        "avg_no_cost": 0.0463,
+        "ev_per_dollar": 0.8365,
+        "full_kelly": 0.8951,
+        "quarter_kelly": 0.2238
+      },
+      "smart_absent": {
+        "label": "high_volume_50_absent",
+        "positions": 256424,
+        "wins": 37334,
+        "win_rate": 0.1456,
+        "avg_no_cost": 0.0326,
+        "ev_per_dollar": 0.1101,
+        "full_kelly": 0.1168,
+        "quarter_kelly": 0.0292
+      },
+      "all": {
+        "label": "high_volume_50_all",
+        "positions": 256744,
+        "wins": 37622,
+        "win_rate": 0.1465,
+        "avg_no_cost": 0.0327,
+        "ev_per_dollar": 0.111,
+        "full_kelly": 0.1177,
+        "quarter_kelly": 0.0294
+      },
+      "wr_delta": 0.7544,
+      "chi2": 1454.42,
+      "p_value": 0.0,
+      "significant": true
+    }
+  }
+}
