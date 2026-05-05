@@ -442,7 +442,8 @@ async function main() {
       // ── #5: Whale watching signal ──────────────────────
       let whaleSignal = { level: "UNKNOWN", count: 0, wallets: [], boost: 1.0, reason: "skipped" };
       if (whaleChecker.enabled) {
-        whaleSignal = await whaleChecker.checkMarket(market.condition_id || market.id);
+        // Use conditionId (hex) for data-api queries — returns correct No/Yes outcomes
+        whaleSignal = await whaleChecker.checkMarket(market.condition_id);
         const emoji = whaleSignal.level === "STRONG" ? "◆" : whaleSignal.level === "MODERATE" ? "◇" : "○";
         console.log(`    Whale: ${emoji} ${whaleSignal.level} (${whaleSignal.count} wallets, ${whaleSignal.reason})`);
       }
