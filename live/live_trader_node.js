@@ -38,6 +38,33 @@ const DEFAULT_POSITION_SIZE = 1.0;
 const MAX_DAILY_POSITIONS = 20;
 const MAX_POSITIONS_PER_CATEGORY = 3;
 const MIN_HOURS_TO_CLOSE = 8;
+// ── Weather region caps (v5) ──────────────────────────────
+const WEATHER_REGIONS = {
+  "new york": "northeast", "nyc": "northeast", "boston": "northeast",
+  "philadelphia": "northeast", "washington": "northeast", "d.c.": "northeast",
+  "atlanta": "southeast", "miami": "southeast", "dallas": "southcentral",
+  "houston": "southcentral",
+  "chicago": "midwest", "detroit": "midwest", "denver": "midwest",
+  "minneapolis": "midwest",
+  "los angeles": "southwest", "la ": "southwest", "phoenix": "southwest",
+  "seattle": "pacific", "san francisco": "pacific",
+  "london": "europe", "paris": "europe", "berlin": "europe",
+  "madrid": "europe", "rome": "europe", "amsterdam": "europe",
+  "tokyo": "asia", "seoul": "asia", "shanghai": "asia",
+  "beijing": "asia", "singapore": "asia",
+  "sydney": "oceania", "melbourne": "oceania",
+};
+const MAX_PER_WEATHER_REGION = 2;
+
+function getWeatherRegion(question) {
+  const q = question.toLowerCase();
+  // Try longer keys first
+  const sorted = Object.entries(WEATHER_REGIONS).sort((a, b) => b[0].length - a[0].length);
+  for (const [key, region] of sorted) {
+    if (q.includes(key)) return region;
+  }
+  return null;
+}
 const DATA_DIR = path.join(__dirname, "shadow_data");
 
 // ── #2: Orderbook depth screen ─────────────────────────────
@@ -367,6 +394,7 @@ async function main() {
   console.log(`  Position size: $${positionSize} (default, Kelly may vary)`);
   console.log(`  Strategy: BUY_NO at YES >= ${YES_MIN}`);
   console.log(`  Category cap: ${MAX_POSITIONS_PER_CATEGORY}/category`);
+  console.log(`  Weather region cap: ${MAX_PER_WEATHER_REGION}/region (8 regions)`);
   console.log(`  Close filter: skip markets <${MIN_HOURS_TO_CLOSE}h to resolution`);
   console.log(`  Depth screen: min ${MIN_NO_DEPTH_SHARES} NO shares`);
   console.log(`  Exit: ${noExit ? "OFF" : `${EXIT_PROFIT_PCT * 100}% profit after ${EXIT_MAX_HOLD_HOURS}h`}`);
@@ -431,6 +459,21 @@ async function main() {
       if (catOpen >= MAX_POSITIONS_PER_CATEGORY) {
         console.log(`  SKIP [${cat} cap ${catOpen}/${MAX_POSITIONS_PER_CATEGORY}]: ${market.question.slice(0, 55)}`);
         continue;
+      }
+
+
+      // ── Weather region cap (v5) ──────────────────────────
+      if (cat === "weather") {
+        const region = getWeatherRegion(market.question);
+        if (region) {
+          const regionOpen = positions.filter(p =>
+            p.status === "open" && p.category === "weather" && getWeatherRegion(p.question) === region
+          ).length;
+          if (regionOpen >= MAX_PER_WEATHER_REGION) {
+            console.log(`  SKIP [${region} region cap ${regionOpen}/${MAX_PER_WEATHER_REGION}]: ${market.question.slice(0, 55)}`);
+            continue;
+          }
+        }
       }
 
       // ── Time-to-close filter (v5) ──────────────────────
