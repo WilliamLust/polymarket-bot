@@ -10,7 +10,11 @@
  *   - Per-category flip rates (from backtest)
  *   - Exit strategy (close positions on price movement)
  *   - Kelly position sizing (vary by category edge)
+ * v3 features:
  *   - Whale watching signal (smart-money NO-buyer confirmation)
+ * v4 features:
+ *   - KL-divergence weather model (NOAA forecast vs market price)
+ *   - Loss analyzer (compound/learning from resolved positions)
  */
 
 const { ClobClient } = require("@polymarket/clob-client-v2");
@@ -49,6 +53,12 @@ const KELLY_FRACTION = 0.25;
 
 // ── #5: Whale watching signal ─────────────────────────────
 const { WhaleChecker } = require("./whale_checker");
+
+// ── #6: KL-divergence weather model ──────────────────────
+const { KLWeather } = require("./kl_weather");
+
+// ── #7: Loss analyzer (compound learning) ─────────────────
+const { LossAnalyzer } = require("./loss_analyzer");
 
 // ── Load env ───────────────────────────────────────────────
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
@@ -279,6 +289,8 @@ async function main() {
   loadFlipRates();
 
   const whaleChecker = new WhaleChecker();
+  const klWeather = new KLWeather();
+  const lossAnalyzer = new LossAnalyzer();
   const account = privateKeyToAccount(PK.startsWith("0x") ? PK : `0x${PK}`);
   const walletClient = createWalletClient({ account, chain: polygon, transport: http() });
   console.log(`Owner (EOA) address: ${account.address}`);
@@ -349,7 +361,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`\nLive Trader v2 — ${dryRun ? "DRY RUN" : "*** LIVE TRADING ***"}`);
+  console.log(`\nLive Trader v4 — ${dryRun ? "DRY RUN" : "*** LIVE TRADING ***"}`);
   console.log(`  Position size: $${positionSize} (default, Kelly may vary)`);
   console.log(`  Strategy: BUY_NO at YES >= ${YES_MIN}`);
   console.log(`  Category cap: ${MAX_POSITIONS_PER_CATEGORY}/category`);
@@ -357,6 +369,8 @@ async function main() {
   console.log(`  Exit: ${noExit ? "OFF" : `${EXIT_PROFIT_PCT * 100}% profit after ${EXIT_MAX_HOLD_HOURS}h`}`);
   console.log(`  Kelly: quarter (${(KELLY_FRACTION * 100).toFixed(0)}%)`);
   console.log(`  Whale signal: ${whaleChecker.enabled ? `${whaleChecker.smartWallets.size} smart wallets loaded` : "DISABLED"}`);
+  console.log(`  KL-Weather: ${klWeather.enabled ? "active (NWS forecast → KL-div)" : "DISABLED"}`);
+  console.log(`  Loss analyzer: ${lossAnalyzer.stats.totalAnalyzed} positions analyzed, ${lossAnalyzer.stats.avoidCategories.length} avoided categories`);
   console.log(`  Deposit wallet: ${depositWallet}`);
 
   function todayKey() {
@@ -368,6 +382,10 @@ async function main() {
 
     // Clear whale trade cache at start of each scan cycle
     whaleChecker.clearCache();
+    klWeather.clearCache();
+
+    // ── #7: Analyze resolved positions for learning ─────
+    lossAnalyzer.analyzeResolved(positions);
 
     // ── #1: Check exits first ────────────────────────────
     if (!noExit && !dryRun) {
@@ -412,6 +430,16 @@ async function main() {
         continue;
       }
 
+      // ── #7: Loss analyzer entry signal ─────────────────
+      const lossSignal = lossAnalyzer.entrySignal(market);
+      if (!lossSignal.pass) {
+        console.log(`  SKIP [loss analyzer: ${lossSignal.reasons[0]}]: ${market.question.slice(0, 55)}`);
+        continue;
+      }
+      if (lossSignal.boost !== 1.0 || lossSignal.reasons.length > 0) {
+        console.log(`    Loss: boost=${lossSignal.boost} ${lossSignal.reasons.join("; ")}`);
+      }
+
       // ── #4: Kelly position sizing ──────────────────────
       let catPositionSize = positionSize;
       if (flipRates && flipRates.categories && flipRates.categories[cat]) {
@@ -448,15 +476,28 @@ async function main() {
         console.log(`    Whale: ${emoji} ${whaleSignal.level} (${whaleSignal.count} wallets, ${whaleSignal.reason})`);
       }
 
-      // Adjust position size by whale boost
+      // ── #6: KL-divergence weather model ────────────────
+      let klSignal = { level: "SKIP", dkl: 0, boost: 1.0, reason: "not weather" };
+      if (klWeather.enabled && cat === "weather") {
+        klSignal = await klWeather.evaluate(market);
+        if (klSignal.level !== "SKIP") {
+          const sym = klSignal.level === "STRONG" ? "◆" : klSignal.level === "MODERATE" ? "◇" : klSignal.level === "CAUTION" ? "⚠" : "○";
+          console.log(`    KL-Weather: ${sym} ${klSignal.level} D_KL=${klSignal.dkl} bits (${klSignal.reason.slice(0, 60)})`);
+        }
+      }
+
+      // Adjust position size by whale boost, KL-weather boost, and loss analyzer boost
       let adjustedSize = catPositionSize;
-      if (whaleSignal.boost !== 1.0) {
-        adjustedSize = Math.round(catPositionSize * whaleSignal.boost * 100) / 100;
+      // Composite: multiply all boost factors together
+      const compositeBoost = whaleSignal.boost * klSignal.boost * lossSignal.boost;
+      if (compositeBoost !== 1.0) {
+        adjustedSize = Math.round(catPositionSize * compositeBoost * 100) / 100;
         adjustedSize = Math.max(0.5, Math.min(adjustedSize, 10)); // clamp to [0.5, 10]
+        console.log(`    Size boost: whale=${whaleSignal.boost} kl=${klSignal.boost} loss=${lossSignal.boost} → composite=${compositeBoost.toFixed(2)} → $${adjustedSize}`);
       }
 
       if (dryRun) {
-        console.log(`  [DRY RUN] BUY NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${adjustedSize} (${shares} shares) ${whaleSignal.level !== "UNKNOWN" ? `whale=${whaleSignal.level}` : ""} | ${market.question.slice(0, 65)}`);
+        console.log(`  [DRY RUN] BUY NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${adjustedSize} (${shares} shares) ${whaleSignal.level !== "UNKNOWN" ? `whale=${whaleSignal.level}` : ""} ${klSignal.level !== "SKIP" ? `kl=${klSignal.level}` : ""} | ${market.question.slice(0, 65)}`);
         positions.push({
           id: market.id,
           question: market.question,
@@ -469,6 +510,9 @@ async function main() {
           status: "dry_run",
           whale_signal: whaleSignal.level,
           whale_count: whaleSignal.count,
+          kl_signal: klSignal.level,
+          kl_dkl: klSignal.dkl,
+          composite_boost: compositeBoost,
         });
         catCounts[cat] = (catCounts[cat] || 0) + 1;
         saveData("positions.json", positions);
@@ -477,7 +521,7 @@ async function main() {
 
       try {
         const adjustedShares = Math.round(adjustedSize / noPrice);
-        console.log(`  BUYING NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${adjustedSize} (${adjustedShares} shares) ${whaleSignal.level !== "UNKNOWN" ? `whale=${whaleSignal.level}` : ""} | ${market.question.slice(0, 65)}`);
+        console.log(`  BUYING NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${adjustedSize} (${adjustedShares} shares) ${whaleSignal.level !== "UNKNOWN" ? `whale=${whaleSignal.level}` : ""} ${klSignal.level !== "SKIP" ? `kl=${klSignal.level}` : ""} | ${market.question.slice(0, 65)}`);
 
         const tickSize = await clobClient.getTickSize(market.no_token_id);
         const negRisk = await clobClient.getNegRisk(market.no_token_id);
@@ -507,6 +551,9 @@ async function main() {
           order_id: order.orderID || order.id || "",
           whale_signal: whaleSignal.level,
           whale_count: whaleSignal.count,
+          kl_signal: klSignal.level,
+          kl_dkl: klSignal.dkl,
+          composite_boost: compositeBoost,
         });
         catCounts[cat] = (catCounts[cat] || 0) + 1;
         saveData("positions.json", positions);
