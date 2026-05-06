@@ -56,6 +56,29 @@ const WEATHER_REGIONS = {
 };
 const MAX_PER_WEATHER_REGION = 2;
 
+// ── Correlation clusters (v6) ────────────────────────────
+const CORRELATION_CLUSTERS = {
+  crypto: {
+    "btc_eth_price": (q) => /\b(bitcoin|btc|ethereum|eth)\b/i.test(q || ""),
+  },
+  politics: {
+    "uk_election": (q) => /\b(reform uk|labour|tory|conservative|council seat|uk local|united kingdom)\b/i.test(q || ""),
+    "us_politics": (q) => /\b(senate|congress|governor|republican|democrat|gop|supreme court)\b/i.test(q || ""),
+  },
+  sports: {
+    "premier_league": (q) => /\b(premier league|epl|nottingham|arsenal|chelsea|liverpool|manchester)\b/i.test(q || ""),
+  },
+};
+const MAX_PER_CORRELATION_CLUSTER = 4;
+
+// ── Secondary strategy (v6) ──────────────────────────────
+const YES_SECONDARY_MIN = 0.85;
+const YES_SECONDARY_MAX = 0.95;
+const SECONDARY_SIZE_FRACTION = 1.0;  // Must be >= 1.0 due to Polymarket $1 minimum order
+const SECONDARY_CATEGORY_CAP = 2;
+
+
+
 
 
 // ── Order retry wrapper (handles order_version_mismatch) ───
@@ -105,6 +128,11 @@ const EXIT_CHECK_ENABLED = false; // v5: disabled - profit-lock is negative EV, 
 // ── #4: Kelly position sizing ──────────────────────────────
 const FLIP_RATES_PATH = path.join(__dirname, "..", "backtesting", "category_flip_rates.json");
 const KELLY_FRACTION = 0.25;
+
+// ── Circuit breaker (v6) ──────────────────────────────────
+const MAX_DRAWDOWN_PCT = 0.15;
+const CIRCUIT_BREAKER_PATH = path.join(DATA_DIR, "circuit_breaker.json");
+
 
 // ── #5: Whale watching signal ─────────────────────────────
 const { WhaleChecker } = require("./whale_checker");
@@ -218,12 +246,12 @@ function kellyPositionSize(category, bankroll) {
   const fullKelly = (b * p - q) / b;
   if (fullKelly <= 0) return 0;
   const quarterKelly = fullKelly * KELLY_FRACTION;
-  const size = Math.max(0.5, Math.min(bankroll * quarterKelly, 10));
+  const size = Math.max(1.0, Math.min(bankroll * quarterKelly, 10));  // v6fix: $1 minimum
   return Math.round(size * 100) / 100;
 }
 
 // ── Market discovery ───────────────────────────────────────
-async function getHighYesMarkets() {
+async function getHighYesMarkets(yesMin = YES_MIN, yesMax = YES_MAX) {
   const markets = [];
   let offset = 0;
   const limit = 100;
@@ -245,13 +273,13 @@ async function getHighYesMarkets() {
 
         const yesPrice = parseFloat(prices[0]);
         const volume = parseFloat(m.volume || 0);
-        if (volume < 5000) continue;
+        if (volume < 2000) continue;  // v6: lowered from 5000 — depth screen catches illiquid books
 
         let tokenIds = m.clobTokenIds;
         if (typeof tokenIds === "string") tokenIds = JSON.parse(tokenIds);
         if (!tokenIds || tokenIds.length < 2) continue;
 
-        if (yesPrice >= YES_MIN && yesPrice < YES_MAX) {
+        if (yesPrice >= yesMin && yesPrice < yesMax) {
           markets.push({
             id: m.id,
             question: m.question,
@@ -272,8 +300,26 @@ async function getHighYesMarkets() {
     if (batch.length < limit || offset >= 500) break;
   }
 
+
+  // ── Event tag fallback for 'other' categories (v6) ──
+  if (Date.now() - eventTagCacheTime > EVENT_TAG_TTL_MS) {
+    eventTagCache = await buildEventTagMap();
+    eventTagCacheTime = Date.now();
+  }
+  let reclassified = 0;
+  for (const m of markets) {
+    if (m.category === "other" && m.condition_id && eventTagCache[m.condition_id]) {
+      const eventCat = eventTagsToCategory(eventTagCache[m.condition_id]);
+      if (eventCat) {
+        m.category = eventCat;
+        reclassified++;
+      }
+    }
+  }
+  if (reclassified > 0) console.log(`[EventTags] Reclassified ${reclassified} 'other' markets via event tags`);
+
   markets.sort((a, b) => b.yes_price - a.yes_price);
-  console.log(`Found ${markets.length} markets with ${YES_MIN}<=YES<${YES_MAX}`);
+  console.log(`Found ${markets.length} markets with ${yesMin}<=YES<${yesMax}`);
   return markets;
 }
 
@@ -408,6 +454,105 @@ async function checkResolutions(positions) {
   return positions;
 }
 
+
+
+// ── Event-based category fallback (v6) ───────────────────
+let eventTagCache = null;
+let eventTagCacheTime = 0;
+const EVENT_TAG_TTL_MS = 30 * 60 * 1000; // 30-minute cache
+
+async function buildEventTagMap() {
+  const tagMap = {};
+  try {
+    let offset = 0;
+    while (offset < 2000) {
+      const resp = await axios.get(`${GAMMA_API}/events`, {
+        params: { closed: false, active: true, limit: 100, offset },
+        timeout: 15000,
+      });
+      const events = resp.data || [];
+      if (events.length === 0) break;
+      for (const ev of events) {
+        const tags = (ev.tags || []).map(t => (typeof t === 'string' ? t : t.name || t.slug || '').toLowerCase());
+        for (const m of (ev.markets || [])) {
+          const cid = m.conditionId || "";
+          if (cid) tagMap[cid] = tags;
+        }
+      }
+      offset += 100;
+      if (events.length < 100) break;
+    }
+  } catch (e) {
+    console.log(`[EventTags] Build failed: ${e.message?.slice(0, 60)}`);
+  }
+  console.log(`[EventTags] Built tag map: ${Object.keys(tagMap).length} markets`);
+  return tagMap;
+}
+
+function eventTagsToCategory(tags) {
+  if (!tags || tags.length === 0) return null;
+  for (const tag of tags) {
+    if (["weather", "temperature"].includes(tag)) return "weather";
+    if (["crypto", "cryptocurrency"].includes(tag)) return "crypto";
+    if (["sports", "nba", "nfl", "mlb", "nhl", "soccer", "mma", "boxing", "tennis", "golf"].includes(tag)) return "sports";
+    if (["politics", "us-politics", "world-politics", "government"].includes(tag)) return "politics";
+    if (["entertainment", "pop-culture", "tv", "movies", "music", "awards", "celebrity"].includes(tag)) return "entertainment";
+    if (["science", "technology", "ai", "space"].includes(tag)) return "tech";
+    if (["finance", "economics", "markets"].includes(tag)) return "finance";
+  }
+  return null;
+}
+// ── Circuit breaker (v6) ──────────────────────────────────
+function loadCircuitBreaker() {
+  try {
+    if (fs.existsSync(CIRCUIT_BREAKER_PATH)) {
+      return JSON.parse(fs.readFileSync(CIRCUIT_BREAKER_PATH, "utf8"));
+    }
+  } catch (e) {}
+  return { peak_bankroll: 0, halted: false, halted_at: null };
+}
+
+function saveCircuitBreaker(cb) {
+  fs.writeFileSync(CIRCUIT_BREAKER_PATH, JSON.stringify(cb, null, 2));
+}
+
+function checkCircuitBreaker(positions, balanceUsd) {
+  let cb = loadCircuitBreaker();
+  const resolvedPnl = positions
+    .filter(p => p.status === "resolved" && p.pnl !== undefined)
+    .reduce((sum, p) => sum + p.pnl, 0);
+  const openCost = positions
+    .filter(p => p.status === "open")
+    .reduce((sum, p) => sum + (p.entry_cost || (p.no_price_at_entry || 0) * (p.position_size || 0)), 0);
+  const currentBankroll = balanceUsd + openCost + resolvedPnl;
+
+  if (cb.peak_bankroll === 0) {
+    cb.peak_bankroll = currentBankroll;
+  }
+  if (currentBankroll > cb.peak_bankroll) {
+    cb.peak_bankroll = currentBankroll;
+  }
+
+  const drawdownPct = cb.peak_bankroll > 0 ? (cb.peak_bankroll - currentBankroll) / cb.peak_bankroll : 0;
+  cb.current_drawdown_pct = drawdownPct;
+  cb.current_bankroll = currentBankroll;
+
+  if (drawdownPct >= MAX_DRAWDOWN_PCT && !cb.halted) {
+    cb.halted = true;
+    cb.halted_at = new Date().toISOString();
+    saveCircuitBreaker(cb);
+    return { halted: true, drawdownPct, currentBankroll, peakBankroll: cb.peak_bankroll };
+  }
+
+  if (cb.halted && drawdownPct < MAX_DRAWDOWN_PCT * 0.67) {
+    cb.halted = false;
+    cb.halted_at = null;
+    console.log("Circuit breaker: auto-unhalted (drawdown recovered below threshold)");
+  }
+
+  saveCircuitBreaker(cb);
+  return { halted: cb.halted || false, drawdownPct, currentBankroll, peakBankroll: cb.peak_bankroll };
+}
 // ── Main ───────────────────────────────────────────────────
 async function main() {
   const args = process.argv.slice(2);
@@ -493,7 +638,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`\nLive Trader v4 — ${dryRun ? "DRY RUN" : "*** LIVE TRADING ***"}`);
+  console.log(`\nLive Trader v6 — ${dryRun ? "DRY RUN" : "*** LIVE TRADING ***"}`);
   console.log(`  Position size: $${positionSize} (default, Kelly may vary)`);
   console.log(`  Strategy: BUY_NO at YES >= ${YES_MIN}`);
   console.log(`  Category cap: ${MAX_POSITIONS_PER_CATEGORY}/category`);
@@ -502,6 +647,11 @@ async function main() {
   console.log(`  Depth screen: min ${MIN_NO_DEPTH_SHARES} NO shares`);
   console.log(`  Exit: ${noExit ? "OFF" : `${EXIT_PROFIT_PCT * 100}% profit after ${EXIT_MAX_HOLD_HOURS}h`}`);
   console.log(`  Kelly: quarter (${(KELLY_FRACTION * 100).toFixed(0)}%)`);
+  console.log(`  Circuit breaker: ${(MAX_DRAWDOWN_PCT * 100).toFixed(0)}% drawdown halt`);
+  console.log(`  Secondary: ${YES_SECONDARY_MIN}-${YES_SECONDARY_MAX} YES @ ${(SECONDARY_SIZE_FRACTION * 100).toFixed(0)}% size`);
+  console.log(`  Volume floor: $2000 (was $5000)`);
+  console.log(`  Whale NONE boost: 1.0 (was 0.7)`);
+  console.log(`  Loss analyzer: avoid at 10 samples / 90% loss rate (was 3/80%)`);
   console.log(`  Whale signal: ${whaleChecker.enabled ? `${whaleChecker.smartWallets.size} smart wallets loaded` : "DISABLED"}`);
   console.log(`  KL-Weather: ${klWeather.enabled ? "active (NWS forecast → KL-div)" : "DISABLED"}`);
   console.log(`  Loss analyzer: ${lossAnalyzer.stats.totalAnalyzed} positions analyzed, ${lossAnalyzer.stats.avoidCategories.length} avoided categories`);
@@ -513,6 +663,32 @@ async function main() {
 
   async function scanAndTrade() {
     let positions = loadData("positions.json");
+
+    // ── Circuit breaker check (v6) ────────────────────
+    const cb = checkCircuitBreaker(positions, balanceUsd);
+    if (cb.halted) {
+      console.log(`CIRCUIT BREAKER: Trading halted! Drawdown ${(cb.drawdownPct * 100).toFixed(1)}% >= ${(MAX_DRAWDOWN_PCT * 100).toFixed(0)}% | Bankroll $${cb.currentBankroll.toFixed(2)} | Peak $${cb.peakBankroll.toFixed(2)}`);
+      return;
+    }
+    if (cb.drawdownPct > 0.01) {
+      console.log(`Drawdown: ${(cb.drawdownPct * 100).toFixed(1)}% | Bankroll: $${cb.currentBankroll.toFixed(2)} | Peak: $${cb.peakBankroll.toFixed(2)}`);
+    }
+
+
+    // ── Refresh balance each scan cycle (v6) ─────────
+    try {
+      const balResp = await clobClient.getBalanceAllowance({ asset_type: "COLLATERAL" });
+      if (balResp && balResp.balance) {
+        const newBal = parseFloat(balResp.balance) / 1e6;
+        if (newBal !== balanceUsd) {
+          console.log(`Balance refresh: $${balanceUsd.toFixed(2)} -> $${newBal.toFixed(2)}`);
+          balanceUsd = newBal;
+        }
+      }
+    } catch (e) {
+      console.log(`Balance refresh failed, using $${balanceUsd.toFixed(2)}`);
+    }
+
 
     // Clear whale trade cache at start of each scan cycle
     whaleChecker.clearCache();
@@ -533,7 +709,8 @@ async function main() {
 
     // ── Entry scan ──────────────────────────────────────
     let markets = await getHighYesMarkets();
-    if (weatherUrgent) {
+  
+  if (weatherUrgent) {
       const before = markets.length;
       markets = markets.filter(m => m.category === "weather");
       console.log("WEATHER URGENT SCAN -- filtered " + before + " markets to " + markets.length + " weather markets");
@@ -587,6 +764,25 @@ async function main() {
           }
         }
       }
+
+      // ── Correlation cluster cap (v6) ───────────────────
+      let clusterSkip = false;
+      if (CORRELATION_CLUSTERS[cat]) {
+        for (const [clusterName, testFn] of Object.entries(CORRELATION_CLUSTERS[cat])) {
+          if (testFn(market.question)) {
+            const clusterOpen = positions.filter(p =>
+              p.status === "open" && p.category === cat && testFn(p.question)
+            ).length;
+            if (clusterOpen >= MAX_PER_CORRELATION_CLUSTER) {
+              console.log(`  SKIP [${clusterName} cluster cap ${clusterOpen}/${MAX_PER_CORRELATION_CLUSTER}]: ${market.question.slice(0, 55)}`);
+              clusterSkip = true;
+              break;
+            }
+          }
+        }
+      }
+      if (clusterSkip) continue;
+
 
       // ── Time-to-close filter (v5) ──────────────────────
       if (market.end_date) {
@@ -659,7 +855,7 @@ async function main() {
       const compositeBoost = whaleSignal.boost * klSignal.boost * lossSignal.boost;
       if (compositeBoost !== 1.0) {
         adjustedSize = Math.round(catPositionSize * compositeBoost * 100) / 100;
-        adjustedSize = Math.max(0.5, Math.min(adjustedSize, 10)); // clamp to [0.5, 10]
+        adjustedSize = Math.max(1.0, Math.min(adjustedSize, 10));  // v6fix: $1 minimum for Polymarket // clamp to [0.5, 10]
         console.log(`    Size boost: whale=${whaleSignal.boost} kl=${klSignal.boost} loss=${lossSignal.boost} → composite=${compositeBoost.toFixed(2)} → $${adjustedSize}`);
       }
 
@@ -730,7 +926,72 @@ async function main() {
         console.error(`  Order failed: ${errMsg}`);
       }
     }
+    // ── Secondary strategy scan (v6): 85-94 cent YES bucket ──
+    const secondaryMarkets = await getHighYesMarkets(YES_SECONDARY_MIN, YES_SECONDARY_MAX);
+
+    for (const market of secondaryMarkets.slice(0, 10)) {
+      if (existingIds.has(market.id)) continue;
+
+      const cat = market.category;
+      const catOpen = positions.filter(p =>
+        (p.status === "open" || p.status === "dry_run") && p.category === cat
+      ).length;
+      if (catOpen >= SECONDARY_CATEGORY_CAP) continue;
+      if (catCounts[cat] >= MAX_POSITIONS_PER_CATEGORY) continue;
+
+      if (market.end_date) {
+        const hoursToClose = (new Date(market.end_date).getTime() - Date.now()) / (1000 * 3600);
+        if (hoursToClose < MIN_HOURS_TO_CLOSE) continue;
+      }
+
+      const secSize = Math.max(1.0, positionSize * SECONDARY_SIZE_FRACTION);  // v6fix: $1 minimum
+      const depth = await checkNoDepth(market.no_token_id, secSize);
+      if (!depth.depthOk) continue;
+
+      const lossSignal = lossAnalyzer.entrySignal(market);
+      if (!lossSignal.pass) continue;
+
+      const noPrice = 1 - market.yes_price;
+      const shares = Math.round(secSize / noPrice);
+
+      if (dryRun) {
+        console.log(`  [SECONDARY DRY] BUY NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${secSize.toFixed(2)} | ${market.question.slice(0, 55)}`);
+        continue;
+      }
+
+      try {
+        console.log(`  [SECONDARY] BUY NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${secSize.toFixed(2)} | ${market.question.slice(0, 55)}`);
+        const tickSize = await clobClient.getTickSize(market.no_token_id);
+        const negRisk = await clobClient.getNegRisk(market.no_token_id);
+        const order = await placeOrderWithRetry(clobClient, {
+          tokenID: market.no_token_id,
+          price: noPrice,
+          size: shares,
+          side: "BUY",
+        }, { tickSize, negRisk });
+
+        console.log(`  SECONDARY ORDER OK: id=${order.orderID || order.id || "submitted"}`);
+        positions.push({
+          id: market.id,
+          question: market.question,
+          entry_time: new Date().toISOString(),
+          yes_price_at_entry: market.yes_price,
+          no_price_at_entry: noPrice,
+          position_size: secSize,
+          no_token_id: market.no_token_id,
+          category: cat,
+          status: "open",
+          strategy: "secondary_85_94",
+          order_id: order.orderID || order.id || "",
+        });
+        catCounts[cat] = (catCounts[cat] || 0) + 1;
+        saveData("positions.json", positions);
+      } catch (e) {
+        console.error(`  Secondary order failed: ${(e.response?.data || e.message || String(e)).slice(0, 80)}`);
+      }
+    }
   }
+
 
   if (weatherUrgent) {
     console.log("\n" + "\u2500".repeat(70));

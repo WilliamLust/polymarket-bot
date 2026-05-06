@@ -145,7 +145,7 @@ class WhaleChecker {
       reason = `${count} smart wallet(s) buying NO`;
     } else {
       level = "NONE";
-      boost = 0.7;
+      boost = 1.0;  // v6: NONE is default state, not a negative signal (was 0.7)
       reason = "no smart wallet activity";
     }
 

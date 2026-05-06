@@ -226,7 +226,7 @@ class LossAnalyzer {
     if (newAnalyzed > 0) {
       // Update avoid categories (loss rate > 80% with at least 3 samples)
       this.stats.avoidCategories = Object.entries(this.stats.byCategory)
-        .filter(([_, s]) => (s.wins + s.losses) >= 3 && s.lossRate > 0.80)
+        .filter(([_, s]) => (s.wins + s.losses) >= 10 && s.lossRate > 0.90)  // v6: raised from 3/80% — 9% WR strategy naturally has high loss rates
         .map(([cat]) => cat);
 
       // Compute loss rate trend (compare recent 10 vs older 10)
@@ -267,11 +267,11 @@ class LossAnalyzer {
 
     // Check 2: Category loss rate
     const catStats = this.stats.byCategory[cat];
-    if (catStats && (catStats.wins + catStats.losses) >= 3) {
-      if (catStats.lossRate > 0.70) {
+    if (catStats && (catStats.wins + catStats.losses) >= 5) {
+      if (catStats.lossRate > 0.85) {  // v6: raised from 3/70%
         boost *= 0.7;
         reasons.push(`${cat} loss rate ${(catStats.lossRate * 100).toFixed(0)}% — reducing size`);
-      } else if (catStats.lossRate < 0.50) {
+      } else if (catStats.lossRate < 0.70) {  // v6: raised from 50% — 9% WR means loss rates of ~91% are normal
         boost *= 1.1;
         reasons.push(`${cat} loss rate ${(catStats.lossRate * 100).toFixed(0)}% — performing well`);
       }

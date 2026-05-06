@@ -1,0 +1,117 @@
+{
+  "history": [
+    {
+      "id": "2137535",
+      "question": "Will the highest temperature in Moscow be 25°C on May 4?",
+      "category": "weather",
+      "entry_time": "2026-05-04T13:34:49.795085+00:00",
+      "yes_price_at_entry": 0.986,
+      "status": "resolved",
+      "failure_mode": "HIGH_YES",
+      "analyzed_at": "2026-05-06T04:50:29.578Z"
+    },
+    {
+      "id": "2137314",
+      "question": "Will the highest temperature in Munich be 24°C on May 4?",
+      "category": "weather",
+      "entry_time": "2026-05-04T14:45:14.665117+00:00",
+      "yes_price_at_entry": 0.97,
+      "status": "resolved",
+      "failure_mode": "WRONG_CATEGORY",
+      "analyzed_at": "2026-05-06T04:50:29.579Z"
+    },
+    {
+      "id": "2097926",
+      "question": "Will the price of Ethereum be between $2,300 and $2,400 on May 4?",
+      "category": "crypto",
+      "entry_time": "2026-05-04T14:45:14.873055+00:00",
+      "yes_price_at_entry": 0.96,
+      "status": "resolved",
+      "failure_mode": "NO_WHALE",
+      "analyzed_at": "2026-05-06T04:50:29.579Z"
+    },
+    {
+      "id": "2107037",
+      "question": "Will the price of Bitcoin be above $76,000 on May 5?",
+      "category": "crypto",
+      "entry_time": "2026-05-04T14:50:17.049941+00:00",
+      "yes_price_at_entry": 0.972,
+      "status": "resolved",
+      "failure_mode": "WRONG_CATEGORY",
+      "analyzed_at": "2026-05-06T04:50:29.579Z"
+    },
+    {
+      "id": "2137403",
+      "question": "Will the highest temperature in Warsaw be 27°C on May 4?",
+      "category": "weather",
+      "entry_time": "2026-05-04T15:31:03.253310+00:00",
+      "yes_price_at_entry": 0.982,
+      "status": "resolved",
+      "failure_mode": "WRONG_CATEGORY",
+      "analyzed_at": "2026-05-06T04:50:29.579Z"
+    },
+    {
+      "id": "2040037",
+      "question": "Will Nottingham Forest FC win on 2026-05-04?",
+      "category": "sports",
+      "entry_time": "2026-05-04T15:56:14.722156+00:00",
+      "yes_price_at_entry": 0.983,
+      "status": "resolved",
+      "failure_mode": "HIGH_YES",
+      "analyzed_at": "2026-05-06T04:50:29.579Z"
+    },
+    {
+      "id": "2137143",
+      "question": "Will the highest temperature in London be 15°C on May 4?",
+      "category": "weather",
+      "entry_time": "2026-05-04T17:52:18.600137+00:00",
+      "yes_price_at_entry": 0.9615,
+      "status": "resolved",
+      "failure_mode": "WRONG_CATEGORY",
+      "analyzed_at": "2026-05-06T04:50:29.579Z"
+    },
+    {
+      "id": "2132190",
+      "question": "Palantir (PLTR) Up or Down on May 4?",
+      "category": "tech",
+      "entry_time": "2026-05-04T19:23:16.404897+00:00",
+      "yes_price_at_entry": 0.98,
+      "status": "resolved",
+      "failure_mode": "HIGH_YES",
+      "analyzed_at": "2026-05-06T04:50:29.579Z"
+    }
+  ],
+  "stats": {
+    "byCategory": {
+      "weather": {
+        "wins": 0,
+        "losses": 4,
+        "lossRate": 1
+      },
+      "crypto": {
+        "wins": 0,
+        "losses": 2,
+        "lossRate": 1
+      },
+      "sports": {
+        "wins": 0,
+        "losses": 1,
+        "lossRate": 1
+      },
+      "tech": {
+        "wins": 0,
+        "losses": 1,
+        "lossRate": 1
+      }
+    },
+    "byFailure": {
+      "HIGH_YES": 3,
+      "WRONG_CATEGORY": 4,
+      "NO_WHALE": 1
+    },
+    "avoidCategories": [],
+    "lossRateTrend": "stable",
+    "totalAnalyzed": 8
+  },
+  "updated": "2026-05-06T04:50:29.579Z"
+}
