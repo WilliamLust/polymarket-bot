@@ -145,8 +145,39 @@ function saveData(filename, data) {
 }
 
 // ── Category normalizer ───────────────────────────────────
-function normalizeCategory(raw) {
-  const c = (raw || "other").toLowerCase().trim();
+function normalizeCategory(raw, question, slug) {
+  const q = (question || "").toLowerCase();
+  const s = (slug || "").toLowerCase();
+  const qs = q + " " + s;
+  if (/\b(high|highest|low|lowest)\s+temperature\b/.test(qs)) return "weather";
+  if (/\b(fahrenheit|celsius)\b/.test(qs)) return "weather";
+  if (/\b(weather|forecast|rain|snow|precipitation)\b/.test(qs)) return "weather";
+  if (/\b(tornado|hurricane|storm)\b/.test(qs)) return "weather";
+  if (/\b(bitcoin|btc|ethereum|eth|solana|sol|xrp|dogecoin|doge|cardano|ada)\b/.test(qs)) return "crypto";
+  if (/\b(crypto|cryptocurrency|defi|nft|token|coin)\b/.test(qs)) return "crypto";
+  if (/\b(satoshi|whale|holdler|binance|coinbase|kraken)\b/.test(qs)) return "crypto";
+  if (/\b(nba|nfl|mlb|nhl|mls|premier league|la liga|serie a|bundesliga)\b/.test(qs)) return "sports";
+  if (/\b(win (on|vs|against)|super bowl|world cup|world series|stanley cup|championship)\b/.test(qs)) return "sports";
+  if (/\b(score|touchdown|goal scorer|home run|triple crown)\b/.test(qs)) return "sports";
+  if (/\b(ufc|mma|boxing|wwe|wrestling|golf|tennis|f1|formula)\b/.test(qs)) return "sports";
+  if (/\b(fighter|match|game|bout|round|knockout|playoff)\b/.test(qs)) return "sports";
+  if (/\b(elect|election|vote|voter|ballot|campaign|primary|runoff)\b/.test(qs)) return "politics";
+  if (/\b(president|senator|congress|governor|mayor|parliament|council seat)\b/.test(qs)) return "politics";
+  if (/\b(democrat|republican|conservative|labour|tory|reform uk|liberal|gop)\b/.test(qs)) return "politics";
+  if (/\b(bill|legislation|supreme court|impeach|veto|filibuster)\b/.test(qs)) return "politics";
+  if (/\b(season|episode|series finale|premiere)\b/.test(qs) && /\b(die|kill|survive|win|appear)\b/.test(qs)) return "entertainment";
+  if (/\b(oscar|emmy|grammy|golden globe|academy award)\b/.test(qs)) return "entertainment";
+  if (/\b(movie|film|album|song|release|box office|billboard)\b/.test(qs)) return "entertainment";
+  if (/\b(tv show|netflix|hbo|disney|amazon prime|streaming)\b/.test(qs)) return "entertainment";
+  if (/\b(ai|artificial intelligence|llm|gpt|chatgpt|claude|gemini|openai)\b/.test(qs)) return "tech";
+  if (/\b(apple|google|microsoft|meta|amazon|tesla|nvidia|palantir|pltr)\b/.test(qs)) return "tech";
+  if (/\b(space|spacex|nasa|rocket|satellite|moon|mars)\b/.test(qs)) return "tech";
+  if (/\b(stock|share|dow|s&p|nasdaq|index|etf|dividend)\b/.test(qs)) return "finance";
+  if (/\b(gdp|inflation|interest rate|federal reserve|fed|cpi|unemployment)\b/.test(qs)) return "finance";
+  if (/\b(oil|natural gas|gold|silver|commodity|crude|brent)\b/.test(qs)) return "finance";
+  if (/\b(up or down|price target|market cap|ipo)\b/.test(qs)) return "finance";
+  const c = (raw || "").toLowerCase().trim();
+  if (!c) return "other";
   if (["weather", "temperature"].includes(c)) return "weather";
   if (["crypto", "cryptocurrency", "bitcoin", "ethereum"].includes(c)) return "crypto";
   if (["sports", "sports-betting", "nba", "nfl", "mlb", "nhl", "soccer", "tennis", "golf", "mma", "boxing"].includes(c)) return "sports";
@@ -229,7 +260,7 @@ async function getHighYesMarkets() {
             volume,
             yes_token_id: tokenIds[0],
             no_token_id: tokenIds[1],
-            category: normalizeCategory(m.category),
+            category: normalizeCategory(m.category, m.question, m.slug),
             condition_id: m.conditionId || "",
             end_date: m.endDate || null,
           });
