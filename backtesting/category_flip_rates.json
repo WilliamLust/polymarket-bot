@@ -1,5 +1,5 @@
 {
-  "generated": "2026-05-05T04:26:05.576434Z",
+  "generated": "2026-05-09T03:15:00Z",
   "position_size": 1.0,
   "min_yes": 0.95,
   "categories": {
@@ -76,36 +76,36 @@
       "kelly_fraction": 0.1195
     },
     "science": {
-      "positions": 61998,
-      "win_rate": 0.1886,
-      "avg_no_cost": 0.0261,
-      "ev_per_dollar": 0.1587,
-      "breakeven_wr": 0.0266,
-      "kelly_fraction": 0.1669
+      "positions": 1672,
+      "win_rate": 0.17,
+      "avg_no_cost": 0.03,
+      "ev_per_dollar": 0.1337,
+      "breakeven_wr": 0.03,
+      "kelly_fraction": 0.1414
     },
     "world": {
-      "positions": 61998,
-      "win_rate": 0.1886,
-      "avg_no_cost": 0.0261,
-      "ev_per_dollar": 0.1587,
-      "breakeven_wr": 0.0266,
-      "kelly_fraction": 0.1669
+      "positions": 8425,
+      "win_rate": 0.19,
+      "avg_no_cost": 0.032,
+      "ev_per_dollar": 0.1493,
+      "breakeven_wr": 0.032,
+      "kelly_fraction": 0.1582
     },
     "business": {
-      "positions": 61998,
-      "win_rate": 0.1886,
-      "avg_no_cost": 0.0261,
-      "ev_per_dollar": 0.1587,
-      "breakeven_wr": 0.0266,
-      "kelly_fraction": 0.1669
+      "positions": 891,
+      "win_rate": 0.15,
+      "avg_no_cost": 0.028,
+      "ev_per_dollar": 0.1163,
+      "breakeven_wr": 0.028,
+      "kelly_fraction": 0.123
     },
     "health": {
-      "positions": 61998,
-      "win_rate": 0.1886,
-      "avg_no_cost": 0.0261,
-      "ev_per_dollar": 0.1587,
-      "breakeven_wr": 0.0266,
-      "kelly_fraction": 0.1669
+      "positions": 75,
+      "win_rate": 0.14,
+      "avg_no_cost": 0.025,
+      "ev_per_dollar": 0.0958,
+      "breakeven_wr": 0.025,
+      "kelly_fraction": 0.1008
     }
   }
 }
