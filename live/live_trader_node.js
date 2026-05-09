@@ -236,6 +236,14 @@ function normalizeCategory(raw, question, slug) {
   if (/\b(gdp|inflation|interest rate|federal reserve|fed|cpi|unemployment)\b/.test(qs)) return "finance";
   if (/\b(oil|natural gas|gold|silver|commodity|crude|brent)\b/.test(qs)) return "finance";
   if (/\b(up or down|price target|market cap|ipo)\b/.test(qs)) return "finance";
+  if (/\b(research|experiment|physics|chemistry|biology|genome|dna|rna|particle|quantum|lab|laboratory)\b/.test(qs)) return "science";
+  if (/\b(climate change|emissions|carbon|biodiversity|endangered|conservation|ocean|arctic|antarctic)\b/.test(qs)) return "science";
+  if (/\b(pandemic|outbreak|virus|vaccine|disease|who |cdc |fda|clinical trial|drug approval)\b/.test(qs)) return "health";
+  if (/\b(hospital|mortality|life expectancy|obesity|mental health|overdose|flu|measles|ebola)\b/.test(qs)) return "health";
+  if (/\b(war|conflict|ceasefire|treaty|sanctions|nato|un |united nations|eu |european union)\b/.test(qs)) return "world";
+  if (/\b(country|nation|border|refugee|immigration|deport|annex|territory|diplomat|embassy)\b/.test(qs)) return "world";
+  if (/\b(merger|acquisition|layoff|bankruptcy|profit|revenue|earnings|quarterly|ceo|cfo)\b/.test(qs)) return "business";
+  if (/\b(startup|unicorn|ipo|valuation|venture|funding round|s&p 500|fortune|dow jones)\b/.test(qs)) return "business";
   const c = (raw || "").toLowerCase().trim();
   if (!c) return "other";
   if (["weather", "temperature"].includes(c)) return "weather";
@@ -243,7 +251,11 @@ function normalizeCategory(raw, question, slug) {
   if (["sports", "sports-betting", "nba", "nfl", "mlb", "nhl", "soccer", "tennis", "golf", "mma", "boxing"].includes(c)) return "sports";
   if (["politics", "politics-us", "u.s. politics", "politics-world", "government"].includes(c)) return "politics";
   if (["entertainment", "pop culture", "tv", "movies", "music", "awards", "celebrity"].includes(c)) return "entertainment";
-  if (["science", "tech", "technology", "ai", "space"].includes(c)) return "tech";
+  if (["tech", "technology"].includes(c)) return "tech";
+  if (["science", "physics", "biology", "chemistry", "climate", "environment", "ecology", "astronomy"].includes(c)) return "science";
+  if (["world", "world-affairs", "geopolitics", "international", "foreign-policy", "war", "conflict"].includes(c)) return "world";
+  if (["business", "business-and-industry", "corporate", "startups", "company"].includes(c)) return "business";
+  if (["health", "healthcare", "medicine", "public-health", "pharma", "disease", "pandemic"].includes(c)) return "health";
   if (["finance", "economics", "markets"].includes(c)) return "finance";
   return "other";
 }
@@ -777,7 +789,7 @@ async function main() {
   const args = process.argv.slice(2);
   const dryRun = !args.includes("--live");
   const loop = args.includes("--loop");
-  const interval = parseInt(args.find(a => a.startsWith("--interval="))?.split("=")[1] || "300") * 1000;
+  const interval = parseInt(args.find(a => a.startsWith("--interval="))?.split("=")[1] || "120") * 1000;
   const positionSize = parseFloat(args.find(a => a.startsWith("--position-size="))?.split("=")[1] || `${DEFAULT_POSITION_SIZE}`);
   const weatherUrgent = args.includes("--weather-urgent");
   const noExit = !EXIT_CHECK_ENABLED;

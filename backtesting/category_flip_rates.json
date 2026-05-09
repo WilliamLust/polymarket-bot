@@ -74,6 +74,38 @@
       "ev_per_dollar": 0.1129,
       "breakeven_wr": 0.0313,
       "kelly_fraction": 0.1195
+    },
+    "science": {
+      "positions": 61998,
+      "win_rate": 0.1886,
+      "avg_no_cost": 0.0261,
+      "ev_per_dollar": 0.1587,
+      "breakeven_wr": 0.0266,
+      "kelly_fraction": 0.1669
+    },
+    "world": {
+      "positions": 61998,
+      "win_rate": 0.1886,
+      "avg_no_cost": 0.0261,
+      "ev_per_dollar": 0.1587,
+      "breakeven_wr": 0.0266,
+      "kelly_fraction": 0.1669
+    },
+    "business": {
+      "positions": 61998,
+      "win_rate": 0.1886,
+      "avg_no_cost": 0.0261,
+      "ev_per_dollar": 0.1587,
+      "breakeven_wr": 0.0266,
+      "kelly_fraction": 0.1669
+    },
+    "health": {
+      "positions": 61998,
+      "win_rate": 0.1886,
+      "avg_no_cost": 0.0261,
+      "ev_per_dollar": 0.1587,
+      "breakeven_wr": 0.0266,
+      "kelly_fraction": 0.1669
     }
   }
 }
