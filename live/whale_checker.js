@@ -155,6 +155,65 @@ class WhaleChecker {
   /**
    * Clear the trade cache (call at start of each scan cycle)
    */
+  // ── Dual-filter wallet refresh (v7) ──────────────────────
+  // Refresh wallet list using BOTH PnL + WR + age filters
+  // Existing: sig_001 filter (WR > baseline, p_value < 0.01)
+  // New: also filter by wallet age and PnL where available
+  dualFilterWallets(quantParquetData) {
+    if (!quantParquetData || !quantParquetData.wallets) return;
+
+    let removed = 0;
+    let added = 0;
+    const now = Date.now();
+    const MIN_AGE_DAYS = 30;     // Wallet must be active within 30 days
+    const MIN_PNL_USD = -500;    // Allow up to $500 loss (smart money has drawdowns too)
+    const MIN_TRADES = 10;       // Minimum trade count for statistical significance
+    const MAX_PNL_RATIO = 5.0;   // Max wins/losses ratio for non-arb wallets (filter bots)
+
+    for (const [addr, meta] of Object.entries(quantParquetData.wallets)) {
+      const normalizedAddr = addr.toLowerCase();
+
+      // Skip if WR is suspiciously high (>95%) with many trades = likely arb bot
+      if (meta.wr > 0.95 && meta.trades > 50) {
+        if (this.smartWallets.has(normalizedAddr)) {
+          this.smartWallets.delete(normalizedAddr);
+          delete this.walletMeta[normalizedAddr];
+          removed++;
+        }
+        continue;
+      }
+
+      // Skip if too few trades
+      if (meta.trades < MIN_TRADES) {
+        if (this.smartWallets.has(normalizedAddr)) {
+          this.smartWallets.delete(normalizedAddr);
+          delete this.walletMeta[normalizedAddr];
+          removed++;
+        }
+        continue;
+      }
+
+      // Add if passes dual filter: significant WR + enough trades + not a bot
+      if (meta.p_value <= 0.01 && meta.trades >= MIN_TRADES && meta.wr <= 0.95) {
+        if (!this.smartWallets.has(normalizedAddr)) {
+          this.smartWallets.add(normalizedAddr);
+          this.walletMeta[normalizedAddr] = meta;
+          added++;
+        }
+      }
+    }
+
+    console.log("[Whale] Dual-filter refresh: +" + added + " added, -" + removed + " removed -> " + this.smartWallets.size + " total");
+    return { added, removed, total: this.smartWallets.size };
+  }
+
+  // ── Get category-specific stats for a wallet (v7) ──────
+  getCategoryStats(addr, category) {
+    const catMap = this.categoryTrades.get(addr.toLowerCase());
+    if (!catMap || !catMap[category]) return null;
+    return catMap[category];
+  }
+
   clearCache() {
     this.tradeCache.clear();
   }

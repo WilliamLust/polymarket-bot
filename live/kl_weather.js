@@ -38,42 +38,45 @@ const OPEN_METEO_CACHE_TTL_MS = 15 * 60 * 1000; // 15-min cache (models update e
 // ── Station database: resolution stations for Polymarket weather markets ──
 // Key = lowercase substring to match in market question, value = { station, lat, lon, unit }
 const STATION_DB = {
-  // North America
-  "new york":  { station: "KLGA", lat: 40.778, lon: -73.873, unit: "F" },
-  "nyc":       { station: "KLGA", lat: 40.778, lon: -73.873, unit: "F" },
-  "los angeles": { station: "KLAX", lat: 33.943, lon: -118.408, unit: "F" },
-  "la ":       { station: "KLAX", lat: 33.943, lon: -118.408, unit: "F" },
-  "chicago":   { station: "KORD", lat: 41.974, lon: -87.907, unit: "F" },
-  "miami":     { station: "KMIA", lat: 25.793, lon: -80.316, unit: "F" },
-  "dallas":    { station: "KDFW", lat: 32.897, lon: -97.038, unit: "F" },
-  "houston":   { station: "KIAH", lat: 29.985, lon: -95.341, unit: "F" },
-  "phoenix":   { station: "KPHX", lat: 33.436, lon: -112.012, unit: "F" },
-  "denver":    { station: "KDEN", lat: 39.856, lon: -104.674, unit: "F" },
-  "atlanta":   { station: "KATL", lat: 33.641, lon: -84.428, unit: "F" },
-  "boston":    { station: "KBOS", lat: 42.363, lon: -71.006, unit: "F" },
-  "seattle":   { station: "KSEA", lat: 47.45, lon: -122.309, unit: "F" },
-  "san francisco": { station: "KSFO", lat: 37.619, lon: -122.375, unit: "F" },
-  "washington": { station: "KDCA", lat: 38.852, lon: -77.038, unit: "F" },
-  "d.c.":      { station: "KDCA", lat: 38.852, lon: -77.038, unit: "F" },
-  "detroit":   { station: "KDTW", lat: 42.216, lon: -83.355, unit: "F" },
-  "minneapolis": { station: "KMSP", lat: 44.882, lon: -93.222, unit: "F" },
-  "philadelphia": { station: "KPHL", lat: 39.872, lon: -75.241, unit: "F" },
-  // Europe
-  "london":    { station: "EGLC", lat: 51.505, lon: 0.0495, unit: "C" },
-  "paris":     { station: "LFPB", lat: 48.969, lon: 2.441, unit: "C" },
-  "berlin":    { station: "EDDB", lat: 52.36, lon: 13.504, unit: "C" },
-  "madrid":    { station: "LEMD", lat: 40.492, lon: -3.569, unit: "C" },
-  "rome":      { station: "LIRF", lat: 41.8, lon: 12.239, unit: "C" },
-  "amsterdam": { station: "EHAM", lat: 52.309, lon: 4.764, unit: "C" },
-  // East Asia
-  "tokyo":     { station: "RJTT", lat: 35.552, lon: 139.78, unit: "C" },
-  "seoul":     { station: "RKSS", lat: 37.558, lon: 126.791, unit: "C" },
-  "shanghai":  { station: "ZSSS", lat: 31.144, lon: 121.806, unit: "C" },
-  "beijing":   { station: "ZBAA", lat: 40.08, lon: 116.585, unit: "C" },
-  "singapore": { station: "WSSS", lat: 1.365, lon: 103.988, unit: "C" },
-  // Oceania
-  "sydney":    { station: "YSSY", lat: -33.946, lon: 151.177, unit: "C" },
-  "melbourne": { station: "YMML", lat: -37.67, lon: 144.843, unit: "C" },
+  // North America - Tier 1 (major hubs)
+  "new york":  { station: "KLGA", lat: 40.778, lon: -73.873, unit: "F", tier: 1 },
+  "nyc":       { station: "KLGA", lat: 40.778, lon: -73.873, unit: "F", tier: 1 },
+  "los angeles": { station: "KLAX", lat: 33.943, lon: -118.408, unit: "F", tier: 1 },
+  "la ":       { station: "KLAX", lat: 33.943, lon: -118.408, unit: "F", tier: 1 },
+  "chicago":   { station: "KORD", lat: 41.974, lon: -87.907, unit: "F", tier: 1 },
+  "miami":     { station: "KMIA", lat: 25.793, lon: -80.316, unit: "F", tier: 1 },
+  "dallas":    { station: "KDFW", lat: 32.897, lon: -97.038, unit: "F", tier: 1 },
+  "houston":   { station: "KIAH", lat: 29.985, lon: -95.341, unit: "F", tier: 1 },
+  "phoenix":   { station: "KPHX", lat: 33.436, lon: -112.012, unit: "F", tier: 1 },
+  "denver":    { station: "KDEN", lat: 39.856, lon: -104.674, unit: "F", tier: 1 },
+  "atlanta":   { station: "KATL", lat: 33.641, lon: -84.428, unit: "F", tier: 1 },
+  "boston":    { station: "KBOS", lat: 42.363, lon: -71.006, unit: "F", tier: 1 },
+  "seattle":   { station: "KSEA", lat: 47.45, lon: -122.309, unit: "F", tier: 1 },
+  "san francisco": { station: "KSFO", lat: 37.619, lon: -122.375, unit: "F", tier: 1 },
+  "washington": { station: "KDCA", lat: 38.852, lon: -77.038, unit: "F", tier: 1 },
+  "d.c.":      { station: "KDCA", lat: 38.852, lon: -77.038, unit: "F", tier: 1 },
+  // North America - Tier 2 (secondary cities, slower repricing = more edge)
+  "detroit":   { station: "KDTW", lat: 42.216, lon: -83.355, unit: "F", tier: 2 },
+  "minneapolis": { station: "KMSP", lat: 44.882, lon: -93.222, unit: "F", tier: 2 },
+  "philadelphia": { station: "KPHL", lat: 39.872, lon: -75.241, unit: "F", tier: 2 },
+  // Europe - Tier 1
+  "london":    { station: "EGLC", lat: 51.505, lon: 0.0495, unit: "C", tier: 1 },
+  // Europe - Tier 2
+  "paris":     { station: "LFPB", lat: 48.969, lon: 2.441, unit: "C", tier: 2 },
+  "berlin":    { station: "EDDB", lat: 52.36, lon: 13.504, unit: "C", tier: 2 },
+  "madrid":    { station: "LEMD", lat: 40.492, lon: -3.569, unit: "C", tier: 2 },
+  "rome":      { station: "LIRF", lat: 41.8, lon: 12.239, unit: "C", tier: 2 },
+  "amsterdam": { station: "EHAM", lat: 52.309, lon: 4.764, unit: "C", tier: 2 },
+  // East Asia - Tier 1
+  "tokyo":     { station: "RJTT", lat: 35.552, lon: 139.78, unit: "C", tier: 1 },
+  // East Asia - Tier 2
+  "seoul":     { station: "RKSS", lat: 37.558, lon: 126.791, unit: "C", tier: 2 },
+  "shanghai":  { station: "ZSSS", lat: 31.144, lon: 121.806, unit: "C", tier: 2 },
+  "beijing":   { station: "ZBAA", lat: 40.08, lon: 116.585, unit: "C", tier: 2 },
+  "singapore": { station: "WSSS", lat: 1.365, lon: 103.988, unit: "C", tier: 2 },
+  // Oceania - Tier 2
+  "sydney":    { station: "YSSY", lat: -33.946, lon: 151.177, unit: "C", tier: 2 },
+  "melbourne": { station: "YMML", lat: -37.67, lon: 144.843, unit: "C", tier: 2 },
 };
 
 // ── Airport station delta table (v5) ─────────────────────────
@@ -112,7 +115,10 @@ class KLWeather {
     this.forecastCache = new Map(); // station → forecast data (TTL-based)
     this.openMeteoCache = new Map(); // lat,lon → ensemble data (TTL-based)
     this.enabled = true;
-    console.log("[KL-Weather] Initialized — station DB has " + Object.keys(STATION_DB).length + " city mappings, " + Object.keys(STATION_DELTAS).length + " delta corrections");
+    this.priceTimestampCache = new Map();  // conditionId -> { price, timestamp } for latency tracking
+    const tier1Count = Object.values(STATION_DB).filter(s => s.tier === 1).length;
+    const tier2Count = Object.values(STATION_DB).filter(s => s.tier === 2).length;
+    console.log("[KL-Weather] Initialized -- station DB has " + Object.keys(STATION_DB).length + " city mappings (" + tier1Count + " T1, " + tier2Count + " T2), " + Object.keys(STATION_DELTAS).length + " delta corrections");
   }
 
   // ── Identify station from market question ──────────────────────
@@ -593,9 +599,23 @@ class KLWeather {
     level = gated.level;
     boost = gated.boost;
 
+    // Step 10 (v7): Model freshness
+    const freshInfo = this._computeModelFreshness();
+    boost = boost * freshInfo.boost;
+
+    // Step 11 (v7): City tier
+    const cityTier = station.tier || 1;
+    const secondaryCityBoost = cityTier === 2 ? 1.3 : 1.0;
+    boost = boost * secondaryCityBoost;
+
     // Append convergence gate info to reason
     if (gated.gateReason) {
       reason = reason + " | " + gated.gateReason;
+    }
+    // Append freshness info
+    reason = reason + " | freshness=" + freshInfo.freshness + " (age=" + freshInfo.ageMinutes + "min)";
+    if (cityTier === 2) {
+      reason = reason + " | TIER_2 city (1.3x boost)";
     }
 
     // Append delta info to reason
@@ -621,6 +641,11 @@ class KLWeather {
       convergenceECMWF: ensemble ? ensemble.ecmwfMax : null,
       convergenceGFS: ensemble ? ensemble.gfsMax : null,
       sampleSize: temps.sampleSize,
+      freshness: freshInfo.freshness,
+      freshnessAgeMinutes: freshInfo.ageMinutes,
+      freshnessBoost: freshInfo.boost,
+      cityTier,
+      secondaryCityBoost,
     };
   }
 

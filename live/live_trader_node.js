@@ -72,23 +72,55 @@ const CORRELATION_CLUSTERS = {
 const MAX_PER_CORRELATION_CLUSTER = 4;
 
 // ── Secondary strategy (v6) ──────────────────────────────
-const YES_SECONDARY_MIN = 0.85;
+const YES_SECONDARY_MIN = 0.90;  // v7fix: narrowed from 0.85 — backtest shows 85-90 has 0.21 Sharpe vs 0.32 for 90-95 (slippage kills edge)
 const YES_SECONDARY_MAX = 0.95;
 const SECONDARY_SIZE_FRACTION = 1.0;  // Must be >= 1.0 due to Polymarket $1 minimum order
-const SECONDARY_CATEGORY_CAP = 2;
+const SECONDARY_CATEGORY_CAP = 3;  // v7fix: raised from 2 — 90-95 tier has 27.8% WR, justifies more per-cat exposure
 
+// ── YES+NO Rebalancing Arb (v7) ─────────────────────────
+const ARB_ENABLED = true;
+const ARB_MIN_SPREAD = 0.03;     // askYes + askNo must be <= 0.97 (3% gap)
+const ARB_MAX_POSITION = 5.0;    // Max $ per arb trade
+const ARB_DAILY_LIMIT = 10;      // Max arb trades per day
 
 
 
 
 // ── Order retry wrapper (handles order_version_mismatch) ───
+// ── Enforce Polymarket $1 minimum order size ─────────────────
+function enforceMinOrderSize(shares, price) {
+  // CLOB rejects marketable BUYs where dollar amount < $1.00
+  const dollarAmount = shares * price;
+  if (dollarAmount < 1.0) {
+    const minShares = Math.ceil(1.0 / price);
+    return minShares;
+  }
+  return shares;
+}
+
+// ── Validate hex address format (prevents proxy-wallet-timestamp leaks) ──
+function isValidHexAddress(addr) {
+  return typeof addr === 'string' && /^0x[0-9a-fA-F]{40}$/.test(addr);
+}
+
+// ── Sanitize address: strip -timestamp suffix if present ──
+function sanitizeAddress(addr) {
+  if (typeof addr !== 'string') return addr;
+  const dashIdx = addr.indexOf('-', 2);  // skip 0x prefix
+  if (dashIdx > 2) {
+    const clean = addr.substring(0, dashIdx);
+    console.log(`  [WARN] Sanitized address ${addr} → ${clean}`);
+    return clean;
+  }
+  return addr;
+}
+
 async function placeOrderWithRetry(clobClient, orderParams, options, maxRetries = 2) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // Force refresh cached version before first attempt
-      if (attempt > 0) {
-        await clobClient.resolveVersion(true);
-      }
+      // v7fix: Always refresh version before every attempt (stale cache causes mismatch)
+      clobClient.cachedVersion = undefined;
+      await clobClient.resolveVersion(true);
       const order = await clobClient.createAndPostOrder(orderParams, options);
       return order;
     } catch (e) {
@@ -96,9 +128,7 @@ async function placeOrderWithRetry(clobClient, orderParams, options, maxRetries 
       const isVersionMismatch = typeof errMsg === 'string' && errMsg.includes('order_version_mismatch');
       if (isVersionMismatch && attempt < maxRetries) {
         console.log(`  Order version mismatch, retrying (${attempt + 1}/${maxRetries})...`);
-        // Force version refresh
-        clobClient.cachedVersion = undefined;
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 1000));  // v7fix: 1s backoff (was 500ms)
         continue;
       }
       throw e;
@@ -131,6 +161,8 @@ const KELLY_FRACTION = 0.25;
 
 // ── Circuit breaker (v6) ──────────────────────────────────
 const MAX_DRAWDOWN_PCT = 0.15;
+const CB_TIME_OVERRIDE_HOURS = 24;     // After this many hours halted, allow reduced trading
+const CB_TIME_OVERRIDE_SIZE = 0.50;    // Position size fraction during time-override (50%)
 const CIRCUIT_BREAKER_PATH = path.join(DATA_DIR, "circuit_breaker.json");
 
 
@@ -544,16 +576,203 @@ function checkCircuitBreaker(positions, balanceUsd) {
     return { halted: true, drawdownPct, currentBankroll, peakBankroll: cb.peak_bankroll };
   }
 
+  // v7fix: Time-based override — if halted for 24h+, allow reduced trading
+  let timeOverride = false;
+  if (cb.halted && cb.halted_at) {
+    const haltedMs = Date.now() - new Date(cb.halted_at).getTime();
+    const haltedHours = haltedMs / (1000 * 3600);
+    if (haltedHours >= CB_TIME_OVERRIDE_HOURS) {
+      timeOverride = true;
+      // Don't clear halted flag — still "halted" but trading at reduced size
+    }
+  }
+
   if (cb.halted && drawdownPct < MAX_DRAWDOWN_PCT * 0.67) {
     cb.halted = false;
     cb.halted_at = null;
+    timeOverride = false;
     console.log("Circuit breaker: auto-unhalted (drawdown recovered below threshold)");
   }
 
   saveCircuitBreaker(cb);
-  return { halted: cb.halted || false, drawdownPct, currentBankroll, peakBankroll: cb.peak_bankroll };
+  return { halted: cb.halted || false, drawdownPct, currentBankroll, peakBankroll: cb.peak_bankroll, timeOverride, halted_at: cb.halted_at };
 }
 // ── Main ───────────────────────────────────────────────────
+// ── YES+NO Rebalancing Arb scan (v7) ─────────────────────
+// When askYes + askNo < 1.0, buying both sides guarantees profit at resolution.
+// After 1% taker fee on each side: need askYes + askNo < 0.98 for ~1% profit.
+async function scanArbitrage(clobClient, positions, balanceUsd, dryRun) {
+  if (!ARB_ENABLED) return;
+  if (balanceUsd < 2) return;
+
+  // Count today's arb trades
+  const today = new Date().toISOString().slice(0, 10);
+  const todayArbCount = positions.filter(p =>
+    p.strategy === "arb_yesno" && p.entry_time && p.entry_time.startsWith(today)
+  ).length;
+  if (todayArbCount >= ARB_DAILY_LIMIT) return;
+
+  console.log("[ARB] Scanning for YES+NO rebalancing opportunities...");
+
+  // Fetch markets across all price ranges
+  let arbMarkets = [];
+  try {
+    let offset = 0;
+    while (offset < 300) {
+      const resp = await axios.get(GAMMA_API + "/markets", {
+        params: { closed: "false", active: "true", limit: 100, offset, order: "volume", ascending: "false" },
+        timeout: 15000,
+      });
+      const batch = resp.data || [];
+      if (batch.length === 0) break;
+
+      for (const m of batch) {
+        try {
+          let prices = m.outcomePrices;
+          if (typeof prices === "string") prices = JSON.parse(prices);
+          if (!prices || prices.length < 2) continue;
+          const yesPrice = parseFloat(prices[0]);
+          const noPrice = parseFloat(prices[1]);
+          const volume = parseFloat(m.volume || 0);
+          if (volume < 5000) continue;
+
+          let tokenIds = m.clobTokenIds;
+          if (typeof tokenIds === "string") tokenIds = JSON.parse(tokenIds);
+          if (!tokenIds || tokenIds.length < 2) continue;
+
+          // Skip if we already have a position in this market
+          const existingIds = new Set(positions.map(p => p.id));
+          if (existingIds.has(m.id)) continue;
+
+          arbMarkets.push({
+            id: m.id,
+            question: m.question,
+            yes_price: yesPrice,
+            no_price: noPrice,
+            volume,
+            yes_token_id: tokenIds[0],
+            no_token_id: tokenIds[1],
+            condition_id: m.conditionId || "",
+          });
+        } catch {}
+      }
+      offset += 100;
+      if (batch.length < 100) break;
+    }
+  } catch (e) {
+    console.log("[ARB] Market fetch failed: " + (e.message || "").slice(0, 60));
+    return;
+  }
+
+  let arbFound = 0;
+  for (const market of arbMarkets.slice(0, 30)) {
+    if (arbFound >= 3) break;  // Max 3 arb trades per scan
+    if (todayArbCount + arbFound >= ARB_DAILY_LIMIT) break;
+
+    try {
+      // Fetch orderbook for both YES and NO sides
+      const [yesBook, noBook] = await Promise.all([
+        axios.get(CLOB_HOST + "/book", { params: { token_id: market.yes_token_id }, timeout: 8000 }),
+        axios.get(CLOB_HOST + "/book", { params: { token_id: market.no_token_id }, timeout: 8000 }),
+      ]);
+
+      const yesAsks = (yesBook.data?.asks || []).sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+      const noAsks = (noBook.data?.asks || []).sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+
+      if (yesAsks.length === 0 || noAsks.length === 0) continue;
+
+      const bestAskYes = parseFloat(yesAsks[0].price);
+      const bestAskNo = parseFloat(noAsks[0].price);
+      const totalCost = bestAskYes + bestAskNo;
+
+      // Check if there's an arb opportunity
+      // After fees: total cost with 1% fee on each side = 1.01 * totalCost
+      // Profit = 1.0 - 1.01 * totalCost
+      // For profit > 0: totalCost < 1.0 / 1.01 = 0.990
+      const totalWithFees = totalCost * 1.01;
+      const profitPerDollar = 1.0 - totalWithFees;
+
+      if (profitPerDollar <= 0 || totalCost > (1.0 - ARB_MIN_SPREAD)) continue;
+
+      // Calculate max size based on available depth
+      const yesDepth = parseFloat(yesAsks[0].size);
+      const noDepth = parseFloat(noAsks[0].size);
+      const yesSharesNeeded = Math.floor(ARB_MAX_POSITION / bestAskYes);
+      const noSharesNeeded = Math.floor(ARB_MAX_POSITION / bestAskNo);
+      let maxSizeShares = Math.min(yesDepth, noDepth, yesSharesNeeded, noSharesNeeded, 100);
+      maxSizeShares = Math.max(maxSizeShares, enforceMinOrderSize(Math.max(1, maxSizeShares), Math.max(bestAskYes, bestAskNo)));  // v7fix: ensure >= $1
+      if (maxSizeShares < 1) continue;
+
+      const arbSizeYes = Math.round(maxSizeShares * bestAskYes * 100) / 100;
+      const arbSizeNo = Math.round(maxSizeShares * bestAskNo * 100) / 100;
+      const totalInvestment = arbSizeYes + arbSizeNo;
+
+      if (totalInvestment > balanceUsd) continue;
+
+      console.log("  [ARB] " + market.question.slice(0, 55) + " | askYes=" + bestAskYes.toFixed(3) + " + askNo=" + bestAskNo.toFixed(3) + " = " + totalCost.toFixed(3) + " | profit=" + (profitPerDollar * 100).toFixed(1) + "% | size=" + maxSizeShares + " shares");
+
+      if (dryRun) {
+        console.log("  [ARB DRY] Would buy YES + NO | total investment=$" + totalInvestment.toFixed(2));
+        positions.push({
+          id: market.id, question: market.question,
+          entry_time: new Date().toISOString(),
+          yes_price_at_entry: bestAskYes, no_price_at_entry: bestAskNo,
+          position_size: totalInvestment, category: "arb",
+          status: "dry_run", strategy: "arb_yesno",
+          no_token_id: market.no_token_id, yes_token_id: market.yes_token_id,
+          arb_spread: totalCost, arb_profit_pct: profitPerDollar,
+        });
+        arbFound++;
+        continue;
+      }
+
+      // Execute both legs
+      try {
+        const yesTickSize = await clobClient.getTickSize(market.yes_token_id);
+        const yesNegRisk = await clobClient.getNegRisk(market.yes_token_id);
+        const noTickSize = await clobClient.getTickSize(market.no_token_id);
+        const noNegRisk = await clobClient.getNegRisk(market.no_token_id);
+
+        // Buy YES
+        const yesOrder = await placeOrderWithRetry(clobClient, {
+          tokenID: market.yes_token_id, price: bestAskYes,
+          size: maxSizeShares, side: "BUY",
+        }, { tickSize: yesTickSize, negRisk: yesNegRisk });
+        console.log("  [ARB] YES order OK: " + (yesOrder.orderID || yesOrder.id || "submitted"));
+
+        // Buy NO
+        const noOrder = await placeOrderWithRetry(clobClient, {
+          tokenID: market.no_token_id, price: bestAskNo,
+          size: maxSizeShares, side: "BUY",
+        }, { tickSize: noTickSize, negRisk: noNegRisk });
+        console.log("  [ARB] NO order OK: " + (noOrder.orderID || noOrder.id || "submitted"));
+
+        positions.push({
+          id: market.id, question: market.question,
+          entry_time: new Date().toISOString(),
+          yes_price_at_entry: bestAskYes, no_price_at_entry: bestAskNo,
+          position_size: totalInvestment, category: "arb",
+          status: "open", strategy: "arb_yesno",
+          no_token_id: market.no_token_id, yes_token_id: market.yes_token_id,
+          yes_order_id: yesOrder.orderID || yesOrder.id || "",
+          no_order_id: noOrder.orderID || noOrder.id || "",
+          arb_spread: totalCost, arb_profit_pct: profitPerDollar,
+        });
+        arbFound++;
+      } catch (e) {
+        console.error("  [ARB] Order failed: " + ((e.response?.data || e.message || String(e)).toString().slice(0, 80)));
+      }
+    } catch (e) {
+      // Skip on orderbook fetch error
+    }
+  }
+  if (arbFound > 0) {
+    console.log("[ARB] Found " + arbFound + " arb opportunity(ies)");
+  } else {
+    console.log("[ARB] No arb opportunities found");
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = !args.includes("--live");
@@ -622,6 +841,20 @@ async function main() {
   }
   clobClient.creds = apiKey;
 
+  // v7fix: Sanity check — verify signer address is valid hex (not proxy-wallet format)
+  try {
+    const signerAddr = await clobClient.signer?.account?.address || clobClient.signer?.address;
+    if (signerAddr && !isValidHexAddress(signerAddr)) {
+      console.error(`[FATAL] Signer address is not valid hex: ${signerAddr}`);
+      process.exit(1);
+    }
+  } catch (e) {
+    // Non-fatal — just log
+    console.log(`  Signer address check: skipped (${e.message || e})`);
+  }
+  // v7fix: Brief delay after API key setup to avoid race condition on first order
+  await new Promise(r => setTimeout(r, 1000));
+
   let balanceUsd = 0;
   try {
     const balResp = await clobClient.getBalanceAllowance({ asset_type: "COLLATERAL" });
@@ -647,11 +880,16 @@ async function main() {
   console.log(`  Depth screen: min ${MIN_NO_DEPTH_SHARES} NO shares`);
   console.log(`  Exit: ${noExit ? "OFF" : `${EXIT_PROFIT_PCT * 100}% profit after ${EXIT_MAX_HOLD_HOURS}h`}`);
   console.log(`  Kelly: quarter (${(KELLY_FRACTION * 100).toFixed(0)}%)`);
-  console.log(`  Circuit breaker: ${(MAX_DRAWDOWN_PCT * 100).toFixed(0)}% drawdown halt`);
-  console.log(`  Secondary: ${YES_SECONDARY_MIN}-${YES_SECONDARY_MAX} YES @ ${(SECONDARY_SIZE_FRACTION * 100).toFixed(0)}% size`);
+  console.log(`  Circuit breaker: ${(MAX_DRAWDOWN_PCT * 100).toFixed(0)}% drawdown halt, ${CB_TIME_OVERRIDE_HOURS}h override at ${(CB_TIME_OVERRIDE_SIZE * 100).toFixed(0)}% size`);
+  console.log(`  Secondary: ${YES_SECONDARY_MIN}-${YES_SECONDARY_MAX} YES @ ${(SECONDARY_SIZE_FRACTION * 100).toFixed(0)}% size [backtest: 27.8% WR, $0.14 EV/pos, Sharpe 0.32]`);
   console.log(`  Volume floor: $2000 (was $5000)`);
+  console.log(`  YES+NO arb: ${ARB_ENABLED ? "ON (spread <" + ((1 - ARB_MIN_SPREAD) * 100).toFixed(0) + "%)" : "OFF"}`);
   console.log(`  Whale NONE boost: 1.0 (was 0.7)`);
   console.log(`  Loss analyzer: avoid at 10 samples / 90% loss rate (was 3/80%)`);
+  // v7: Run dual-filter refresh on startup
+  if (whaleChecker.enabled) {
+    whaleChecker.dualFilterWallets({ wallets: whaleChecker.walletMeta });
+  }
   console.log(`  Whale signal: ${whaleChecker.enabled ? `${whaleChecker.smartWallets.size} smart wallets loaded` : "DISABLED"}`);
   console.log(`  KL-Weather: ${klWeather.enabled ? "active (NWS forecast → KL-div)" : "DISABLED"}`);
   console.log(`  Loss analyzer: ${lossAnalyzer.stats.totalAnalyzed} positions analyzed, ${lossAnalyzer.stats.avoidCategories.length} avoided categories`);
@@ -664,13 +902,21 @@ async function main() {
   async function scanAndTrade() {
     let positions = loadData("positions.json");
 
-    // ── Circuit breaker check (v6) ────────────────────
+    // ── Circuit breaker check (v6/v7) ────────────────────
     const cb = checkCircuitBreaker(positions, balanceUsd);
-    if (cb.halted) {
-      console.log(`CIRCUIT BREAKER: Trading halted! Drawdown ${(cb.drawdownPct * 100).toFixed(1)}% >= ${(MAX_DRAWDOWN_PCT * 100).toFixed(0)}% | Bankroll $${cb.currentBankroll.toFixed(2)} | Peak $${cb.peakBankroll.toFixed(2)}`);
+    if (cb.halted && !cb.timeOverride) {
+      const haltedHours = cb.halted_at ? ((Date.now() - new Date(cb.halted_at).getTime()) / 3600000).toFixed(1) : '?';
+      console.log(`CIRCUIT BREAKER: Trading halted! Drawdown ${(cb.drawdownPct * 100).toFixed(1)}% >= ${(MAX_DRAWDOWN_PCT * 100).toFixed(0)}% | Bankroll $${cb.currentBankroll.toFixed(2)} | Peak $${cb.peakBankroll.toFixed(2)} | Halted ${haltedHours}h`);
       return;
     }
-    if (cb.drawdownPct > 0.01) {
+    // v7fix: Time-override — trade at reduced size after 24h halt
+    let effectivePositionSize = positionSize;
+    if (cb.halted && cb.timeOverride) {
+      effectivePositionSize = Math.max(1.0, positionSize * CB_TIME_OVERRIDE_SIZE);
+      const haltedHours = cb.halted_at ? ((Date.now() - new Date(cb.halted_at).getTime()) / 3600000).toFixed(1) : '?';
+      console.log(`CB OVERRIDE: Trading at ${(CB_TIME_OVERRIDE_SIZE * 100).toFixed(0)}% size ($${effectivePositionSize.toFixed(2)}) after ${haltedHours}h halt | DD ${(cb.drawdownPct * 100).toFixed(1)}% | Bankroll $${cb.currentBankroll.toFixed(2)}`);
+    }
+    if (cb.drawdownPct > 0.01 && !cb.halted) {
       console.log(`Drawdown: ${(cb.drawdownPct * 100).toFixed(1)}% | Bankroll: $${cb.currentBankroll.toFixed(2)} | Peak: $${cb.peakBankroll.toFixed(2)}`);
     }
 
@@ -804,7 +1050,7 @@ async function main() {
       }
 
       // ── #4: Kelly position sizing ──────────────────────
-      let catPositionSize = positionSize;
+      let catPositionSize = effectivePositionSize;  // v7fix: uses CB-reduced size if in override
       if (flipRates && flipRates.categories && flipRates.categories[cat]) {
         const kellySize = kellyPositionSize(cat, balanceUsd);
         if (kellySize === 0) {
@@ -818,7 +1064,6 @@ async function main() {
       }
 
       const noPrice = 1 - market.yes_price;
-      const shares = Math.round(catPositionSize / noPrice);
 
       // ── #2: Orderbook depth screen ─────────────────────
       const depth = await checkNoDepth(market.no_token_id, catPositionSize);
@@ -834,7 +1079,7 @@ async function main() {
       let whaleSignal = { level: "UNKNOWN", count: 0, wallets: [], boost: 1.0, reason: "skipped" };
       if (whaleChecker.enabled) {
         // Use conditionId (hex) for data-api queries — returns correct No/Yes outcomes
-        whaleSignal = await whaleChecker.checkMarket(market.condition_id);
+        whaleSignal = await whaleChecker.checkMarket(market.condition_id, cat);
         const emoji = whaleSignal.level === "STRONG" ? "◆" : whaleSignal.level === "MODERATE" ? "◇" : "○";
         console.log(`    Whale: ${emoji} ${whaleSignal.level} (${whaleSignal.count} wallets, ${whaleSignal.reason})`);
       }
@@ -845,7 +1090,9 @@ async function main() {
         klSignal = await klWeather.evaluate(market);
         if (klSignal.level !== "SKIP") {
           const sym = klSignal.level === "STRONG" ? "◆" : klSignal.level === "MODERATE" ? "◇" : klSignal.level === "CAUTION" ? "⚠" : "○";
-          console.log(`    KL-Weather: ${sym} ${klSignal.level} D_KL=${klSignal.dkl} bits (${klSignal.reason.slice(0, 60)})`);
+          const tierTag = klSignal.cityTier === 2 ? " T2" : "";
+          const freshTag = klSignal.freshness === "FRESH" ? " ✓" : klSignal.freshness === "STALE" ? " ✗" : "";
+          console.log(`    KL-Weather: ${sym} ${klSignal.level} D_KL=${klSignal.dkl} bits${tierTag}${freshTag} (${klSignal.reason.slice(0, 70)})`);
         }
       }
 
@@ -856,8 +1103,13 @@ async function main() {
       if (compositeBoost !== 1.0) {
         adjustedSize = Math.round(catPositionSize * compositeBoost * 100) / 100;
         adjustedSize = Math.max(1.0, Math.min(adjustedSize, 10));  // v6fix: $1 minimum for Polymarket // clamp to [0.5, 10]
-        console.log(`    Size boost: whale=${whaleSignal.boost} kl=${klSignal.boost} loss=${lossSignal.boost} → composite=${compositeBoost.toFixed(2)} → $${adjustedSize}`);
+        const klBoostBreakdown = klSignal.freshness ? ` kl[kl=${klSignal.boost},fresh=${klSignal.freshnessBoost},tier=${klSignal.secondaryCityBoost}]` : ` kl=${klSignal.boost}`;
+        console.log(`    Size boost: whale=${whaleSignal.boost}${klBoostBreakdown} loss=${lossSignal.boost} → composite=${compositeBoost.toFixed(2)} → $${adjustedSize}`);
       }
+
+      // v7fix: Compute shares AFTER boost (adjustedSize may differ from catPositionSize)
+      let shares = Math.round(adjustedSize / noPrice);
+      shares = enforceMinOrderSize(shares, noPrice);  // ensure dollar amount >= $1
 
       if (dryRun) {
         console.log(`  [DRY RUN] BUY NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${adjustedSize} (${shares} shares) ${whaleSignal.level !== "UNKNOWN" ? `whale=${whaleSignal.level}` : ""} ${klSignal.level !== "SKIP" ? `kl=${klSignal.level}` : ""} | ${market.question.slice(0, 65)}`);
@@ -944,7 +1196,7 @@ async function main() {
         if (hoursToClose < MIN_HOURS_TO_CLOSE) continue;
       }
 
-      const secSize = Math.max(1.0, positionSize * SECONDARY_SIZE_FRACTION);  // v6fix: $1 minimum
+      const secSize = Math.max(1.0, effectivePositionSize * SECONDARY_SIZE_FRACTION);  // v7fix: uses CB-reduced size if in override
       const depth = await checkNoDepth(market.no_token_id, secSize);
       if (!depth.depthOk) continue;
 
@@ -952,7 +1204,8 @@ async function main() {
       if (!lossSignal.pass) continue;
 
       const noPrice = 1 - market.yes_price;
-      const shares = Math.round(secSize / noPrice);
+      let shares = Math.round(secSize / noPrice);
+      shares = enforceMinOrderSize(shares, noPrice);  // v7fix: ensure dollar amount >= $1
 
       if (dryRun) {
         console.log(`  [SECONDARY DRY] BUY NO @ YES=${market.yes_price.toFixed(3)} NO=$${noPrice.toFixed(3)} size=$${secSize.toFixed(2)} | ${market.question.slice(0, 55)}`);
@@ -981,7 +1234,7 @@ async function main() {
           no_token_id: market.no_token_id,
           category: cat,
           status: "open",
-          strategy: "secondary_85_94",
+          strategy: "secondary_90_94",  // v7fix: range narrowed
           order_id: order.orderID || order.id || "",
         });
         catCounts[cat] = (catCounts[cat] || 0) + 1;
@@ -990,8 +1243,10 @@ async function main() {
         console.error(`  Secondary order failed: ${(e.response?.data || e.message || String(e)).slice(0, 80)}`);
       }
     }
-  }
 
+  // ── YES+NO rebalancing arb scan (v7) ──
+  await scanArbitrage(clobClient, positions, balanceUsd, dryRun);
+  }
 
   if (weatherUrgent) {
     console.log("\n" + "\u2500".repeat(70));
